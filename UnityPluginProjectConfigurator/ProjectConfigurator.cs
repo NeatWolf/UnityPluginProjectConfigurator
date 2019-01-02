@@ -48,9 +48,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 ConfigureGroup(xml.AddPropertyGroup(), true, isEditor, ver);
                 ConfigureGroup(xml.AddPropertyGroup(), false, isEditor, ver);
             }
-
-            project.ReevaluateIfNecessary();
-            project.Save();
         }
 
         private static void ConfigureGroup(ProjectPropertyGroupElement group,

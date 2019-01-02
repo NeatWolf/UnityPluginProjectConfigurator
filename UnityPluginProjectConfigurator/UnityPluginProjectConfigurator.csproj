@@ -127,7 +127,7 @@
   <ItemGroup>
     <Compile Include="CommandLineOptions.cs" />
     <Compile Include="Configs\Config.cs" />
-    <Compile Include="Configs\ConfigParseException.cs" />
+    <Compile Include="ConfigParseException.cs" />
     <Compile Include="Configs\CSharpProject.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ProjectConfigurator.cs" />

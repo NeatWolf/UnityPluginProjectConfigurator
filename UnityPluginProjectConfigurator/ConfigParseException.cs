@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShuHai.UnityPluginProjectConfigurator.Configs
+namespace ShuHai.UnityPluginProjectConfigurator
 {
     public class ConfigParseException : Exception
     {

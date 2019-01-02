@@ -1,11 +1,9 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Build.Construction;
 using Microsoft.Build.Evaluation;
 using net.r_eg.MvsSln;
-using ShuHai.UnityPluginProjectConfigurator.Configs;
 
 namespace ShuHai.UnityPluginProjectConfigurator
 {
@@ -21,13 +19,13 @@ namespace ShuHai.UnityPluginProjectConfigurator
             var dir = new DirectoryInfo(directory);
             ProjectName = dir.Name;
 
-            ProjectVersion = FindUnityProjectVersion(dir);
+            ProjectVersion = FindProjectVersion(dir);
 
             var slnPath = Path.Combine(dir.FullName, ProjectName + ".sln");
             Solution = new Sln(slnPath, SlnItems.All & ~SlnItems.ProjectDependencies);
         }
 
-        public void Configure(Project csharpProject, string dllAssetDirectory)
+        public void Configure(Project csharpProject, bool isEditor, string dllAssetDirectory)
         {
             if (csharpProject == null)
                 throw new ArgumentNullException(nameof(csharpProject));
@@ -35,18 +33,21 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 throw new ArgumentNullException(nameof(dllAssetDirectory));
             if (!dllAssetDirectory.StartsWith("Assets"))
                 throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
-        }
 
-        private static ProjectPropertyGroupElement FindOrCreatePostBuildEventProperty(Project csharpProject)
-        {
-            throw new NotImplementedException();
+            var dllFullPath = Path.Combine(Solution.Result.SolutionDir, dllAssetDirectory);
+            if (isEditor)
+                dllFullPath = Path.Combine(dllFullPath, "Editor");
+            dllFullPath = dllFullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+            var copyDllCmd = $@"xcopy ""$(TargetDir)$(TargetName).*"" ""{dllFullPath}"" /i /y";
+            csharpProject.SetProperty("PostBuildEvent", copyDllCmd);
         }
 
         #region Find Version
 
         private static readonly Regex UnityVersionRegex = new Regex(@"m_EditorVersion: (?<ver>\d+\.\d+\.*\d*\w*\d*)\Z");
 
-        private static UnityVersion FindUnityProjectVersion(DirectoryInfo unityProjectDir)
+        private static UnityVersion FindProjectVersion(DirectoryInfo unityProjectDir)
         {
             var versionPath = Path.Combine(unityProjectDir.FullName, "ProjectSettings", "ProjectVersion.txt");
             var versionText = File.ReadAllText(versionPath);
