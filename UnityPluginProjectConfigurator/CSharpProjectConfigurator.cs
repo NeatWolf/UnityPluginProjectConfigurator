@@ -2,56 +2,38 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Build.Construction;
-using Microsoft.Build.Evaluation;
-using ShuHai.UnityPluginProjectConfigurator.Configs;
 
 namespace ShuHai.UnityPluginProjectConfigurator
 {
-    public class ProjectConfigurator
+    public static class CSharpProjectConfigurator
     {
-        public static void Configure(CSharpProject config, IEnumerable<UnityVersion> fallbackVersions)
-        {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config));
-
-            var cfgVers = config.Versions;
-            var versions = cfgVers == null || cfgVers.Length == 0
-                ? fallbackVersions
-                : cfgVers.Select(UnityVersion.Parse);
-            Configure(config.Path, config.IsEditor, versions);
-        }
-
-        public static void Configure(string projectPath, bool isEditor, IEnumerable<UnityVersion> versions)
-        {
-            if (projectPath == null)
-                throw new ArgumentNullException(nameof(projectPath));
-
-            var project = new Project(projectPath);
-            Configure(project, isEditor, versions);
-            ProjectCollection.GlobalProjectCollection.UnloadProject(project);
-        }
-
-        public static void Configure(Project project, bool isEditor, IEnumerable<UnityVersion> versions)
+        public static void ConfigureVersions(CSharpProject project, bool isEditor, IEnumerable<UnityVersion> versions)
         {
             if (project == null)
                 throw new ArgumentNullException(nameof(project));
 
+            if (!versions.Any())
+                return;
+
             var xml = project.Xml;
 
             // Remove existed configuration property groups.
-            var configurationGroups = xml.PropertyGroups.Where(g => !string.IsNullOrEmpty(g.Condition)).ToArray();
+            var configurationGroups = project.FindPropertyGroups(
+                g => g.Condition.Contains("$(Configuration)|$(Platform)"));
             foreach (var group in configurationGroups)
                 xml.RemoveChild(group);
 
+            // Add new configuration property group for each version.
+            ProjectPropertyGroupElement addAfterMe = project.DefaultPropertyGroup;
             foreach (var ver in versions)
             {
-                ConfigureGroup(xml.AddPropertyGroup(), true, isEditor, ver);
-                ConfigureGroup(xml.AddPropertyGroup(), false, isEditor, ver);
+                ConfigureGroup(addAfterMe = project.CreatePropertyGroupAfter(addAfterMe), true, isEditor, ver);
+                ConfigureGroup(addAfterMe = project.CreatePropertyGroupAfter(addAfterMe), false, isEditor, ver);
             }
         }
 
-        private static void ConfigureGroup(ProjectPropertyGroupElement group,
-            bool isDebug, bool isEditor, UnityVersion version)
+        private static void ConfigureGroup(
+            ProjectPropertyGroupElement group, bool isDebug, bool isEditor, UnityVersion version)
         {
             string conf = isDebug ? "Debug" : "Release";
             string configurationString = version != null ? $"{conf}-{version.ToString(true)}" : conf;

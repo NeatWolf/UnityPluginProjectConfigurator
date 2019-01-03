@@ -20,6 +20,8 @@
             public string Key;
 
             public string DllAssetDirectory;
+
+            public bool CreateDllAssetDirectoryIfNecessary = true;
         }
     }
 }

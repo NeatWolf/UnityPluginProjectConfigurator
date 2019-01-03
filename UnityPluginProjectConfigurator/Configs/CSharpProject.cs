@@ -16,9 +16,14 @@
         public bool IsEditor { get; set; }
 
         /// <summary>
-        ///     List of supported unity versions of the project to configure. <see cref="Config.DefaultVersions" /> is used if it
-        ///     is <see langword="null" /> or empty.
+        ///     List of supported unity versions of the project to configure.
         /// </summary>
         public string[] Versions { get; set; }
+
+        /// <summary>
+        ///     Indicates whether to use <see cref="Config.DefaultVersions" /> as fallback when <see cref="Versions" /> is
+        ///     <see langword="null" /> or empty.
+        /// </summary>
+        public bool DefaultVersionsAsFallback = true;
     }
 }

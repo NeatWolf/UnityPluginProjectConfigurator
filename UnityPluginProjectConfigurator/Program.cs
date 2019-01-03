@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using CommandLine;
 using Microsoft.Build.Evaluation;
@@ -26,20 +25,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
             try
             {
                 var config = Configs.Config.Load(options.ConfigPath);
-                var projectInfoDict = CreateProjectInfoDict(projects, config.CSharpProjects, config.DefaultVersions);
-                ConfigureCSharpProjects(projectInfoDict);
-                ConfigureUnityProjects(config.UnityProjects, projectInfoDict);
+                var projectDict = CreateCSharpProjectDict(projects, config.CSharpProjects, config.DefaultVersions);
 
-                foreach (var proj in projectInfoDict.Values.Select(i => i.Project))
-                {
-                    Console.WriteLine($"Save project '{proj.FullPath}'");
-                    proj.ReevaluateIfNecessary();
-                    proj.Save();
-                }
+                ConfigureCSharpProjects(projectDict);
+                ConfigureUnityProjects(config.UnityProjects, projectDict);
+
+                SaveProjects(projectDict.Values.Select(i => i.Project));
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                ConsoleLogger.WriteLine(e);
 #if DEBUG
                 throw;
 #endif
@@ -48,92 +43,79 @@ namespace ShuHai.UnityPluginProjectConfigurator
             {
                 projects.Dispose();
             }
-            Console.WriteLine("Done!");
+            ConsoleLogger.WriteLine("Done!");
         }
 
-        private static void ConfigureCSharpProjects(IReadOnlyDictionary<string, ProjectInfo> projectInfoDict)
+        private static void ConfigureCSharpProjects(IReadOnlyDictionary<string, CSharpProject> projectDict)
         {
-            foreach (var kvp in projectInfoDict)
+            foreach (var kvp in projectDict)
             {
-                var info = kvp.Value;
-                Console.WriteLine($@"Configure c# project '{info.Project.FullPath}'.");
-                ProjectConfigurator.Configure(info.Project, info.IsEditor, info.Versions);
+                var proj = kvp.Value;
+                ConsoleLogger.WriteLine($@"Configure c# project '{proj.Project.FullPath}'.");
+                CSharpProjectConfigurator.ConfigureVersions(proj, proj.IsEditor, proj.Versions);
             }
         }
 
         private static void ConfigureUnityProjects(
             IEnumerable<Configs.UnityProject> unityProjectConfigs,
-            IReadOnlyDictionary<string, ProjectInfo> candidateCSharpProjectDict)
+            IReadOnlyDictionary<string, CSharpProject> candidateCSharpProjectDict)
         {
             foreach (var uproj in unityProjectConfigs)
             {
-                Console.WriteLine($"Configure unity project: '{uproj.Path}'.");
+                ConsoleLogger.WriteLine($"Configure unity project: '{uproj.Path}'.");
 
                 using (var configurator = new UnityProjectConfigurator(uproj.Path))
                 {
                     foreach (var csProjCfg in uproj.CSharpProjects)
                     {
                         var projKey = csProjCfg.Key;
-                        if (!candidateCSharpProjectDict.TryGetValue(projKey, out var info))
+                        if (!candidateCSharpProjectDict.TryGetValue(projKey, out var proj))
                         {
-                            Console.WriteLine($"Error: Unable to find c# project with key '{projKey}'.");
+                            ConsoleLogger.WriteLine($"Error: Unable to find c# project with key '{projKey}'.");
                             continue;
                         }
-                        configurator.Configure(info.Project, info.IsEditor, csProjCfg.DllAssetDirectory);
+                        configurator.AddCSharpProject(proj, csProjCfg);
                     }
                 }
             }
         }
 
-        #region ProjectInfo
+        private static void SaveProjects(IEnumerable<Project> projects)
+        {
+            foreach (var proj in projects)
+            {
+                ConsoleLogger.WriteLine($"Save project '{proj.FullPath}'");
+                proj.ReevaluateIfNecessary();
+                proj.Save();
+            }
+        }
 
-        private static IReadOnlyDictionary<string, ProjectInfo> CreateProjectInfoDict(
+        #region Project
+
+        private static IReadOnlyDictionary<string, CSharpProject> CreateCSharpProjectDict(
             ProjectCollection projectCollection,
             IReadOnlyDictionary<string, Configs.CSharpProject> projectConfigs, IEnumerable<string> fallbackVersions)
         {
-            var dict = new Dictionary<string, ProjectInfo>();
+            var dict = new Dictionary<string, CSharpProject>();
             foreach (var kvp in projectConfigs)
             {
                 var projCfg = kvp.Value;
                 var projPath = projCfg.Path;
 
-                Console.WriteLine($"Load project '{projPath}'");
+                ConsoleLogger.WriteLine($"Load project '{projPath}'");
                 var proj = projectCollection.LoadProject(projPath);
 
+                IEnumerable<string> versions = Array.Empty<string>();
                 var cfgVers = projCfg.Versions;
-                var versions = cfgVers == null || cfgVers.Length == 0 ? fallbackVersions : cfgVers;
+                if ((cfgVers == null || cfgVers.Length == 0) && projCfg.DefaultVersionsAsFallback)
+                    versions = fallbackVersions;
 
-                dict.Add(kvp.Key, new ProjectInfo(proj, projCfg, versions));
+                dict.Add(kvp.Key, new CSharpProject(proj, projCfg, versions));
             }
             return dict;
         }
 
-        private sealed class ProjectInfo
-        {
-            public readonly Project Project;
-
-            public readonly bool IsEditor;
-            public readonly IReadOnlyList<UnityVersion> Versions;
-
-            public ProjectInfo(Project project, Configs.CSharpProject config, IEnumerable<string> versions)
-            {
-                Project = project ?? throw new ArgumentNullException(nameof(project));
-                IsEditor = config.IsEditor;
-                Versions = versions.Select(UnityVersion.Parse).ToArray();
-            }
-
-            public void WritePropertiesToFile(string path)
-            {
-                using (var fs = new FileStream(path, FileMode.Create))
-                using (var writer = new StreamWriter(fs))
-                {
-                    foreach (var prop in Project.Properties)
-                        writer.WriteLine($"{prop.Name}: {prop.EvaluatedValue}");
-                }
-            }
-        }
-
-        #endregion ProjectInfo
+        #endregion Project
 
         #endregion Run
 
@@ -141,9 +123,9 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void HandleErrors(IEnumerable<Error> errors)
         {
-            Console.WriteLine("Command Line Errors:\n");
+            ConsoleLogger.WriteLine("Command Line Errors:\n");
             foreach (var err in errors)
-                Console.WriteLine(err);
+                ConsoleLogger.WriteLine(err);
         }
 
         #endregion Errors

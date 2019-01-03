@@ -1,8 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Text.RegularExpressions;
-using Microsoft.Build.Construction;
-using Microsoft.Build.Evaluation;
 using net.r_eg.MvsSln;
 
 namespace ShuHai.UnityPluginProjectConfigurator
@@ -25,22 +23,50 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Solution = new Sln(slnPath, SlnItems.All & ~SlnItems.ProjectDependencies);
         }
 
-        public void Configure(Project csharpProject, bool isEditor, string dllAssetDirectory)
+        public void AddCSharpProject(CSharpProject project, Configs.UnityProject.CSharpProject config)
         {
-            if (csharpProject == null)
-                throw new ArgumentNullException(nameof(csharpProject));
-            if (dllAssetDirectory == null)
-                throw new ArgumentNullException(nameof(dllAssetDirectory));
-            if (!dllAssetDirectory.StartsWith("Assets"))
-                throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
+            if (project == null)
+                throw new ArgumentNullException(nameof(project));
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
 
-            var dllFullPath = Path.Combine(Solution.Result.SolutionDir, dllAssetDirectory);
-            if (isEditor)
-                dllFullPath = Path.Combine(dllFullPath, "Editor");
-            dllFullPath = dllFullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+            var dllAssetDirectory = config.DllAssetDirectory;
+            if (!string.IsNullOrEmpty(dllAssetDirectory))
+            {
+                if (!dllAssetDirectory.StartsWith("Assets"))
+                    throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
 
-            var copyDllCmd = $@"xcopy ""$(TargetDir)$(TargetName).*"" ""{dllFullPath}"" /i /y";
-            csharpProject.SetProperty("PostBuildEvent", copyDllCmd);
+                var assetDir = Path.Combine(Solution.Result.SolutionDir, dllAssetDirectory);
+                assetDir = assetDir.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+                var copyCmd = $@"xcopy ""$(TargetDir)$(TargetName).*"" ""{assetDir}"" /i /y";
+                if (!config.CreateDllAssetDirectoryIfNecessary)
+                    copyCmd = $@"if exist ""{assetDir}"" ({copyCmd})";
+
+                // The approach below doesn't work since it add the property to existing PropertyGroup such as the
+                // PropertyGroup that contains ProjectGuid and AssemblyName, this is usually the first PropertyGroup in
+                // the .csproj file, and MSBuild evaluate $(TargetDir) and $(TargetName) as empty string. To ensure the
+                // macros available, we need to add the PostBuildEvent property after
+                // <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />.
+                //csharpProject.SetProperty("PostBuildEvent", copyDllCmd);
+
+                SetBuildEvent(project, "PostBuildEvent", copyCmd);
+            }
+        }
+
+        private static void SetBuildEvent(CSharpProject project, string name, string value)
+        {
+            // Remove old build event property if existed.
+            if (project.FindProperty(name, out var group, out var property))
+            {
+                group.RemoveChild(property);
+                if (group.Count == 0)
+                    project.Xml.RemoveChild(group);
+            }
+
+            // Add new build event property.
+            var buildEventGroup = project.CreatePropertyGroupAfter(project.MSBuildToolsImport);
+            buildEventGroup.AddProperty(name, value);
         }
 
         #region Find Version
