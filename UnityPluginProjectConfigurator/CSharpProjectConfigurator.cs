@@ -5,57 +5,67 @@ using Microsoft.Build.Construction;
 
 namespace ShuHai.UnityPluginProjectConfigurator
 {
+    using XmlPropertyGroup = ProjectPropertyGroupElement;
+
     public static class CSharpProjectConfigurator
     {
-        public static void ConfigureVersions(CSharpProject project, bool isEditor, IEnumerable<UnityVersion> versions)
+        public static void SetupUnityPluginProject(CSharpProject project,
+            Configs.UnityManagedPluginProject config, IEnumerable<string> fallbackVersions)
         {
             if (project == null)
                 throw new ArgumentNullException(nameof(project));
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
 
-            if (!versions.Any())
-                return;
+            IEnumerable<string> versions = config.Versions;
+            if (CollectionUtil.IsNullOrEmpty(versions) && config.UseFallbackVersionsIfNecessary)
+                versions = fallbackVersions;
+            if (CollectionUtil.IsNullOrEmpty(versions))
+                throw new ArgumentException("Versions of target project is not determined.");
 
-            var xml = project.Xml;
-
-            // Remove existed configuration property groups.
-            var configurationGroups = project.FindPropertyGroups(
-                g => g.Condition.Contains("$(Configuration)|$(Platform)"));
-            foreach (var group in configurationGroups)
-                xml.RemoveChild(group);
-
-            // Add new configuration property group for each version.
-            ProjectPropertyGroupElement addAfterMe = project.DefaultPropertyGroup;
-            foreach (var ver in versions)
+            var configurationGroups = project.ParseConfigurationPropertyGroups(null);
+            if (config.RemoveExistedConfigurations)
             {
-                ConfigureGroup(addAfterMe = project.CreatePropertyGroupAfter(addAfterMe), true, isEditor, ver);
-                ConfigureGroup(addAfterMe = project.CreatePropertyGroupAfter(addAfterMe), false, isEditor, ver);
+                foreach (var group in configurationGroups.Select(p => p.Value))
+                    project.Xml.RemoveChild(group);
+            }
+
+            var addAfterMe = project.DefaultPropertyGroup;
+            foreach (var ver in versions.Select(UnityVersion.Parse))
+            {
+                foreach (var type in EnumTraits<ProjectConfigurationType>.Values)
+                {
+                    SetupConfigurationGroupForUnity(
+                        addAfterMe = project.CreatePropertyGroupAfter(addAfterMe), type, config.ForUnityEditor, ver);
+                }
             }
         }
 
-        private static void ConfigureGroup(
-            ProjectPropertyGroupElement group, bool isDebug, bool isEditor, UnityVersion version)
+        private static void SetupConfigurationGroupForUnity(
+            XmlPropertyGroup group, ProjectConfigurationType type, bool forUnityEditor, UnityVersion version)
         {
-            string conf = isDebug ? "Debug" : "Release";
-            string configurationString = version != null ? $"{conf}-{version.ToString(true)}" : conf;
+            string name = type.ToString();
+            string configurationString = version != null ? $"{name}-{version.ToString(true)}" : name;
             group.Condition = $" '$(Configuration)|$(Platform)' == '{configurationString}|AnyCPU' ";
 
+            bool isDebug = type == ProjectConfigurationType.Debug;
             if (isDebug)
                 group.SetProperty("DebugSymbols", "true");
 
             group.SetProperty("DebugType", isDebug ? "full" : "pdbonly");
             group.SetProperty("Optimize", (!isDebug).ToString().ToLower());
             group.SetProperty("OutputPath", $@"bin\{configurationString}");
-            group.SetProperty("DefineConstants", GetDefineConstants(isDebug, isEditor, version));
+            group.SetProperty("DefineConstants", GetDefineConstantsForUnity(isDebug, forUnityEditor, version));
             group.SetProperty("ErrorReport", "prompt");
             group.SetProperty("WarningLevel", "4");
         }
 
-        private static string GetDefineConstants(bool isDebug, bool isEditor, UnityVersion version)
+        private static string GetDefineConstantsForUnity(bool isDebug, bool forUnityEditor, UnityVersion version)
         {
             var directives = new List<string> { "TRACE" };
             if (isDebug)
                 directives.Add("DEBUG");
-            if (isEditor)
+            if (forUnityEditor)
                 directives.Add("UNITY_EDITOR");
 
             if (version != null)
@@ -63,11 +73,13 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 if (version.Major == null)
                     throw new ArgumentException("Major version number is required.", nameof(version));
 
-                var directiveVer = UnityVersion.Unity_5_3;
+                // Unity-5.3 is the minimum unity version that defines X_X_OR_NEWER constants.
+                var directiveVer = HistoricalUnityVersions.Unity_5_3;
                 while (directiveVer != null && directiveVer <= version)
                 {
                     directives.Add($"UNITY_{directiveVer.Cycle}_{directiveVer.Major.Value}_OR_NEWER");
-                    directiveVer.NextMajorVersion(out directiveVer);
+                    if (!HistoricalUnityVersions.NextMajorVersion(directiveVer, out directiveVer))
+                        break;
                 }
                 directives.Add($"UNITY_{version.Cycle}_{version.Major}");
                 directives.Add($"UNITY_{version.Cycle}");

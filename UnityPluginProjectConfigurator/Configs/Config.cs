@@ -4,23 +4,14 @@ using Newtonsoft.Json;
 
 namespace ShuHai.UnityPluginProjectConfigurator.Configs
 {
+    using UnityProjectDict = Dictionary<string, UnityProject>;
+
     public class Config
     {
         /// <summary>
-        ///     List of projects that need to configure.
+        ///     Settings for c# projects that need to configure as unity plugin projects.
         /// </summary>
-        public Dictionary<string, CSharpProject> CSharpProjects { get; set; } = new Dictionary<string, CSharpProject>
-        {
-            ["RuntimeProject"] = new CSharpProject
-            {
-                Path = "Full path to your .csproj file.",
-                Versions = new[] { "5.6", "2017.1", "2017.2", "2017.3", "2017.4", "2018.1", "2018.2", "2018.3" }
-            },
-            ["EditorProject"] = new CSharpProject
-            {
-                Path = "Full path to your .csproj file."
-            }
-        };
+        public UnityPlugins UnityPlugins = new UnityPlugins();
 
         /// <summary>
         ///     Unity projects that need to configure.
@@ -28,45 +19,30 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         ///     property.
         ///     Projects listed in this config file will be added to the unity generated c# solution.
         /// </summary>
-        public UnityProject[] UnityProjects { get; set; } =
+        public UnityProjectDict UnityProjects = new UnityProjectDict
         {
-            new UnityProject
+            ["Full path to root directory of unity project"] = new UnityProject
             {
-                Path = "Full path to root directory of unity project",
-                CSharpProjects = new[]
+                PluginProjects = new Dictionary<string, UnityProject.PluginProject>
                 {
-                    new UnityProject.CSharpProject
+                    ["Full path to plugin project."] = new UnityProject.PluginProject
                     {
-                        Key = "RuntimeProject",
-                        DllAssetDirectory = @"Assets/Example/Assemblies"
+                        DllAssetDirectory = @"Assets/Example/Assemblies",
+                        CreateDllAssetDirectoryIfNecessary = false
                     }
                 }
             },
-            new UnityProject
+            ["Full path to root directory of another unity project"] = new UnityProject
             {
-                Path = "Full path to root directory of another unity project",
-                CSharpProjects = new[]
+                PluginProjects = new Dictionary<string, UnityProject.PluginProject>
                 {
-                    new UnityProject.CSharpProject
+                    ["Full path to plugin project."] = new UnityProject.PluginProject
                     {
-                        Key = "EditorProject",
-                        DllAssetDirectory = @"Assets/Example/Assemblies/Editor"
+                        DllAssetDirectory = @"Assets/Example/Assemblies/Editor",
+                        CreateDllAssetDirectoryIfNecessary = false
                     }
                 }
             }
-        };
-
-        /// <summary>
-        ///     Supported versions to configure on target projects.
-        ///     More specifically, project configuration "Debug-[version]" and "Release-[version]" of each version will be added to
-        ///     target projects if it dosen't exist or overwritten if already existed.
-        ///     This configuration is applied if Versions property of [CSharpProjects.[ProjectKey]] is not set.
-        /// </summary>
-        public string[] DefaultVersions { get; set; } =
-        {
-            "5.3", "5.4", "5.5", "5.6",
-            "2017.1", "2017.2", "2017.3", "2017.4",
-            "2018.1", "2018.2", "2018.3"
         };
 
         #region Persistency

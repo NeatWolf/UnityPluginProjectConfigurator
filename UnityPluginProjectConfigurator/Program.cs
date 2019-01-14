@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using CommandLine;
-using Microsoft.Build.Evaluation;
+using NLog;
 
 namespace ShuHai.UnityPluginProjectConfigurator
 {
@@ -21,101 +20,66 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void Run(CommandLineOptions options)
         {
-            var projects = new ProjectCollection();
             try
             {
                 var config = Configs.Config.Load(options.ConfigPath);
-                var projectDict = CreateCSharpProjectDict(projects, config.CSharpProjects, config.DefaultVersions);
 
-                ConfigureCSharpProjects(projectDict);
-                ConfigureUnityProjects(config.UnityProjects, projectDict);
+                ConfigureUnityPlugins(config.UnityPlugins);
+                ConfigureUnityProjects(config.UnityProjects);
 
-                SaveProjects(projectDict.Values.Select(i => i.Project));
+                SaveProjects(CSharpProject.Instances);
             }
             catch (Exception e)
             {
-                ConsoleLogger.WriteLine(e);
+                ConsoleLogger.WriteLine(LogLevel.Error, e);
 #if DEBUG
                 throw;
 #endif
             }
             finally
             {
-                projects.Dispose();
+                CSharpProject.UnloadAll();
             }
             ConsoleLogger.WriteLine("Done!");
         }
 
-        private static void ConfigureCSharpProjects(IReadOnlyDictionary<string, CSharpProject> projectDict)
+        private static void ConfigureUnityPlugins(Configs.UnityPlugins config)
         {
-            foreach (var kvp in projectDict)
+            foreach (var kvp in config.ManagedProjects)
             {
-                var proj = kvp.Value;
-                ConsoleLogger.WriteLine($@"Configure c# project '{proj.Project.FullPath}'.");
-                CSharpProjectConfigurator.ConfigureVersions(proj, proj.IsEditor, proj.Versions);
+                var projPath = kvp.Key;
+                var projCfg = kvp.Value;
+
+                ConsoleLogger.WriteLine($@"Configure c# project '{projPath}'.");
+                CSharpProjectConfigurator.SetupUnityPluginProject(
+                    CSharpProject.GetOrLoad(projPath), projCfg, config.FallbackVersions);
             }
         }
 
-        private static void ConfigureUnityProjects(
-            IEnumerable<Configs.UnityProject> unityProjectConfigs,
-            IReadOnlyDictionary<string, CSharpProject> candidateCSharpProjectDict)
+        private static void ConfigureUnityProjects(IReadOnlyDictionary<string, Configs.UnityProject> configs)
         {
-            foreach (var uproj in unityProjectConfigs)
+            foreach (var ukvp in configs)
             {
-                ConsoleLogger.WriteLine($"Configure unity project: '{uproj.Path}'.");
+                var uprojPath = ukvp.Key;
+                var uprojCfg = ukvp.Value;
 
-                using (var configurator = new UnityProjectConfigurator(uproj.Path))
-                {
-                    foreach (var csProjCfg in uproj.CSharpProjects)
-                    {
-                        var projKey = csProjCfg.Key;
-                        if (!candidateCSharpProjectDict.TryGetValue(projKey, out var proj))
-                        {
-                            ConsoleLogger.WriteLine($"Error: Unable to find c# project with key '{projKey}'.");
-                            continue;
-                        }
-                        configurator.AddCSharpProject(proj, csProjCfg);
-                    }
-                }
+                ConsoleLogger.WriteLine($"Configure unity project: '{uprojPath}'.");
+
+                var configurator = new UnityProjectConfigurator(uprojPath);
+                foreach (var pkvp in uprojCfg.PluginProjects)
+                    configurator.AddCSharpProject(CSharpProject.GetOrLoad(pkvp.Key), pkvp.Value);
+                configurator.SaveSolution();
             }
         }
 
-        private static void SaveProjects(IEnumerable<Project> projects)
+        private static void SaveProjects(IEnumerable<CSharpProject> projects)
         {
             foreach (var proj in projects)
             {
-                ConsoleLogger.WriteLine($"Save project '{proj.FullPath}'");
-                proj.ReevaluateIfNecessary();
+                ConsoleLogger.WriteLine($"Save project '{proj.Path}'");
                 proj.Save();
             }
         }
-
-        #region Project
-
-        private static IReadOnlyDictionary<string, CSharpProject> CreateCSharpProjectDict(
-            ProjectCollection projectCollection,
-            IReadOnlyDictionary<string, Configs.CSharpProject> projectConfigs, IEnumerable<string> fallbackVersions)
-        {
-            var dict = new Dictionary<string, CSharpProject>();
-            foreach (var kvp in projectConfigs)
-            {
-                var projCfg = kvp.Value;
-                var projPath = projCfg.Path;
-
-                ConsoleLogger.WriteLine($"Load project '{projPath}'");
-                var proj = projectCollection.LoadProject(projPath);
-
-                IEnumerable<string> versions = Array.Empty<string>();
-                var cfgVers = projCfg.Versions;
-                if ((cfgVers == null || cfgVers.Length == 0) && projCfg.DefaultVersionsAsFallback)
-                    versions = fallbackVersions;
-
-                dict.Add(kvp.Key, new CSharpProject(proj, projCfg, versions));
-            }
-            return dict;
-        }
-
-        #endregion Project
 
         #endregion Run
 
@@ -125,7 +89,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
         {
             ConsoleLogger.WriteLine("Command Line Errors:\n");
             foreach (var err in errors)
-                ConsoleLogger.WriteLine(err);
+                ConsoleLogger.WriteLine(LogLevel.Error, err);
         }
 
         #endregion Errors
