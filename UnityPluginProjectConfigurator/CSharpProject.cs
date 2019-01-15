@@ -12,6 +12,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
     using XmlElement = ProjectElement;
     using XmlPropertyGroup = ProjectPropertyGroupElement;
     using XmlProperty = ProjectPropertyElement;
+    using XmlItemGroup = ProjectItemGroupElement;
+    using XmlItem = ProjectItemElement;
     using XmlImport = ProjectImportElement;
     using StringPair = KeyValuePair<string, string>;
 
@@ -47,6 +49,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Name = System.IO.Path.GetFileNameWithoutExtension(MSBuildProject.FullPath);
 
             InitializePropertyGroups();
+            InitializeItemGroups();
             InitializeImports();
         }
 
@@ -123,28 +126,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public XmlPropertyGroup CreatePropertyGroupAfter(XmlElement afterMe)
         {
-            InsertPropertyGroupArgumentCheck(afterMe, nameof(afterMe));
-
-            var group = Xml.CreatePropertyGroupElement();
-            Xml.InsertAfterChild(group, afterMe);
-            return group;
+            return CreateAndInsertXmlElement(afterMe, Xml.CreatePropertyGroupElement, Xml.InsertAfterChild);
         }
 
         public XmlPropertyGroup CreatePropertyGroupBefore(XmlElement beforeMe)
         {
-            InsertPropertyGroupArgumentCheck(beforeMe, nameof(beforeMe));
-
-            var group = Xml.CreatePropertyGroupElement();
-            Xml.InsertBeforeChild(group, beforeMe);
-            return group;
-        }
-
-        private void InsertPropertyGroupArgumentCheck(XmlElement arg, string name)
-        {
-            if (arg == null)
-                throw new ArgumentNullException(name);
-            if (arg.ContainingProject != Xml)
-                throw new ArgumentException("Child of current project required.", name);
+            return CreateAndInsertXmlElement(beforeMe, Xml.CreatePropertyGroupElement, Xml.InsertBeforeChild);
         }
 
         private void InitializePropertyGroups()
@@ -316,6 +303,9 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 this.list = list;
                 this.dict = dict;
 
+                namesString = new Lazy<string>(AppendNames(new StringBuilder(), false).ToString);
+                valuesString = new Lazy<string>(AppendValues(new StringBuilder(), false).ToString);
+                str = new Lazy<string>(BuildString);
                 hashCode = HashCode.Get(list);
             }
 
@@ -328,13 +318,18 @@ namespace ShuHai.UnityPluginProjectConfigurator
             private readonly IReadOnlyDictionary<string, string> dict;
             private readonly IReadOnlyList<Condition> list;
 
-            #region To String
+            #region Strings
 
-            public string NamesToString() => AppendNames(new StringBuilder(), false).ToString();
+            public string NamesString => namesString.Value;
+            public string ValuesString => valuesString.Value;
 
-            public string ValuesToString() => AppendValues(new StringBuilder(), false).ToString();
+            public override string ToString() => str.Value;
 
-            public override string ToString()
+            [NonSerialized] private readonly Lazy<string> namesString;
+            [NonSerialized] private readonly Lazy<string> valuesString;
+            [NonSerialized] private readonly Lazy<string> str;
+
+            private string BuildString()
             {
                 var builder = new StringBuilder();
 
@@ -379,7 +374,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 return builder;
             }
 
-            #endregion To String
+            #endregion Strings
 
             #region Equality
 
@@ -411,6 +406,37 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #endregion Property Groups
 
+        #region Item Groups
+
+        public XmlItemGroup DefaultReferenceGroup { get; private set; }
+
+        public XmlItemGroup FindItemGroup(Func<XmlItemGroup, bool> predicate)
+        {
+            return Xml.ItemGroups.FirstOrDefault(predicate);
+        }
+
+        public IEnumerable<XmlItemGroup> FindItemGroups(Func<XmlItemGroup, bool> predicate)
+        {
+            return Xml.ItemGroups.Where(predicate);
+        }
+
+        public XmlItemGroup CreateItemGroupAfter(XmlElement afterMe)
+        {
+            return CreateAndInsertXmlElement(afterMe, Xml.CreateItemGroupElement, Xml.InsertAfterChild);
+        }
+
+        public XmlItemGroup CreateItemGroupBefore(XmlElement beforeMe)
+        {
+            return CreateAndInsertXmlElement(beforeMe, Xml.CreateItemGroupElement, Xml.InsertBeforeChild);
+        }
+
+        private void InitializeItemGroups()
+        {
+            DefaultReferenceGroup = FindItemGroup(g => g.Items.Any(i => i.Include == "System"));
+        }
+
+        #endregion Item Groups
+
         #region Imports
 
         public XmlImport MSBuildToolsImport;
@@ -425,6 +451,21 @@ namespace ShuHai.UnityPluginProjectConfigurator
         }
 
         #endregion Imports
+
+        private T CreateAndInsertXmlElement<T>(XmlElement insertAnchor,
+            Func<T> createMethod, Action<XmlElement, XmlElement> insertMethod)
+            where T : XmlElement
+        {
+            Ensure.Argument.NotNull(insertAnchor, nameof(insertAnchor));
+            if (insertAnchor.ContainingProject != Xml)
+                throw new ArgumentException("Child of current project required.", nameof(insertAnchor));
+
+            var group = createMethod();
+            insertMethod(group, insertAnchor);
+            return group;
+        }
+
+        #endregion Xml
 
         #region Persistency
 
@@ -441,8 +482,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
         }
 
         #endregion Persistency
-
-        #endregion Xml
 
         #region Instances
 

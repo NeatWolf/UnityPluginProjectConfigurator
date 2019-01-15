@@ -20,21 +20,22 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void Run(CommandLineOptions options)
         {
+#if DEBUG
+            RunImpl(options);
+#else
+            TryRun(options);
+#endif
+        }
+
+        private static void TryRun(CommandLineOptions options)
+        {
             try
             {
-                var config = Configs.Config.Load(options.ConfigPath);
-
-                ConfigureUnityPlugins(config.UnityPlugins);
-                ConfigureUnityProjects(config.UnityProjects);
-
-                SaveProjects(CSharpProject.Instances);
+                RunImpl(options);
             }
             catch (Exception e)
             {
                 ConsoleLogger.WriteLine(LogLevel.Error, e);
-#if DEBUG
-                throw;
-#endif
             }
             finally
             {
@@ -43,16 +44,26 @@ namespace ShuHai.UnityPluginProjectConfigurator
             ConsoleLogger.WriteLine("Done!");
         }
 
+        private static void RunImpl(CommandLineOptions options)
+        {
+            //Configs.Config.Save("TemplateConfig.json", Configs.Config.CreateTemplate());
+            var config = Configs.Config.Load(options.ConfigPath);
+
+            ConfigureUnityPlugins(config.UnityPlugins);
+            ConfigureUnityProjects(config.UnityProjects);
+
+            SaveProjects(CSharpProject.Instances);
+        }
+
         private static void ConfigureUnityPlugins(Configs.UnityPlugins config)
         {
             foreach (var kvp in config.ManagedProjects)
             {
                 var projPath = kvp.Key;
-                var projCfg = kvp.Value;
-
                 ConsoleLogger.WriteLine($@"Configure c# project '{projPath}'.");
-                CSharpProjectConfigurator.SetupUnityPluginProject(
-                    CSharpProject.GetOrLoad(projPath), projCfg, config.FallbackVersions);
+
+                var parameter = CSharpProjectConfigurator.ParseUnityPluginParameter(config, kvp.Value);
+                CSharpProjectConfigurator.SetupUnityPluginProject(CSharpProject.GetOrLoad(projPath), parameter);
             }
         }
 

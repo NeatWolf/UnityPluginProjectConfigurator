@@ -18,8 +18,6 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         {
             public bool AddToSolution = true;
 
-            public bool CopyDllAsset = true;
-
             public string DllAssetDirectory;
 
             public bool CreateDllAssetDirectoryIfNecessary = true;

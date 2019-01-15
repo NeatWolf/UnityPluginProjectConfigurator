@@ -2,45 +2,311 @@
   "UnityPlugins": {
     "ManagedProjects": {
       "Full path to your .csproj file.": {
-        "ForUnityEditor": false,
+        "ForEditor": false,
         "RemoveExistedConfigurations": true,
-        "Versions": [
-          "5.6",
-          "2017.1",
-          "2017.2",
-          "2017.3",
-          "2017.4",
-          "2018.1",
-          "2018.2",
-          "2018.3"
-        ],
-        "UseFallbackVersionsIfNecessary": true
+        "Versions": {
+          "5.6": {
+            "AssemblyReferences": [
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+                "Environments": [
+                  "Runtime",
+                  "Editor"
+                ]
+              },
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+                "Environments": [
+                  "Editor"
+                ]
+              }
+            ]
+          },
+          "2017.1": {
+            "AssemblyReferences": [
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+                "Environments": [
+                  "Runtime",
+                  "Editor"
+                ]
+              },
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+                "Environments": [
+                  "Editor"
+                ]
+              }
+            ]
+          },
+          "2017.4": {
+            "AssemblyReferences": [
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+                "Environments": [
+                  "Runtime",
+                  "Editor"
+                ]
+              },
+              {
+                "Name": null,
+                "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+                "Environments": [
+                  "Editor"
+                ]
+              }
+            ]
+          }
+        }
       },
       "Full path to your another .csproj file.": {
-        "ForUnityEditor": true,
+        "ForEditor": true,
         "RemoveExistedConfigurations": true,
-        "Versions": null,
-        "UseFallbackVersionsIfNecessary": true
+        "Versions": null
       }
     },
-    "FallbackVersions": [
-      "5.3",
-      "5.4",
-      "5.5",
-      "5.6",
-      "2017.1",
-      "2017.2",
-      "2017.3",
-      "2017.4",
-      "2018.1",
-      "2018.2",
-      "2018.3"
-    ]
+    "DefaultVersions": {
+      "5.3": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "5.4": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "5.5": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "5.6": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2017.1": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2017.2": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2017.3": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2017.4": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2018.1": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2018.2": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2018.3": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      },
+      "2019.1": {
+        "AssemblyReferences": [
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEngine.dll",
+            "Environments": [
+              "Runtime",
+              "Editor"
+            ]
+          },
+          {
+            "Name": null,
+            "Path": "Unity Install Directory\\Editor\\Data\\Managed\\UnityEditor.dll",
+            "Environments": [
+              "Editor"
+            ]
+          }
+        ]
+      }
+    }
   },
   "UnityProjects": {
     "Full path to root directory of unity project": {
       "PluginProjects": {
         "Full path to plugin project.": {
+          "AddToSolution": true,
+          "CopyDllAsset": true,
           "DllAssetDirectory": "Assets/Example/Assemblies",
           "CreateDllAssetDirectoryIfNecessary": false
         }
@@ -49,6 +315,8 @@
     "Full path to root directory of another unity project": {
       "PluginProjects": {
         "Full path to plugin project.": {
+          "AddToSolution": true,
+          "CopyDllAsset": true,
           "DllAssetDirectory": "Assets/Example/Assemblies/Editor",
           "CreateDllAssetDirectoryIfNecessary": false
         }

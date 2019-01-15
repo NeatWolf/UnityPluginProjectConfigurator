@@ -53,7 +53,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 }
             }
 
-            if (config.CopyDllAsset)
+            if (!string.IsNullOrEmpty(config.DllAssetDirectory))
                 ConfigurePostBuildEvent(project, config);
         }
 
@@ -88,7 +88,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 if (slnCfg == null)
                     throw new ArgumentException("Appropriate project configuration for solution not found.");
 
-                var valuesText = conditions.ValuesToString();
+                var valuesText = conditions.ValuesString;
                 valuesText = valuesText.Replace("AnyCPU", "Any CPU");
                 projectConfigurations.Add(new PropertyLine(
                     $@"{slnCfg}.ActiveCfg", valuesText));

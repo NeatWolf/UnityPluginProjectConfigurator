@@ -19,31 +19,46 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         ///     property.
         ///     Projects listed in this config file will be added to the unity generated c# solution.
         /// </summary>
-        public UnityProjectDict UnityProjects = new UnityProjectDict
+        public UnityProjectDict UnityProjects;
+
+        #region Template
+
+        public static Config CreateTemplate()
         {
-            ["Full path to root directory of unity project"] = new UnityProject
+            var unityProjects = new UnityProjectDict
             {
-                PluginProjects = new Dictionary<string, UnityProject.PluginProject>
+                ["Full path to root directory of unity project"] = new UnityProject
                 {
-                    ["Full path to plugin project."] = new UnityProject.PluginProject
+                    PluginProjects = new Dictionary<string, UnityProject.PluginProject>
                     {
-                        DllAssetDirectory = @"Assets/Example/Assemblies",
-                        CreateDllAssetDirectoryIfNecessary = false
+                        ["Full path to plugin project."] = new UnityProject.PluginProject
+                        {
+                            DllAssetDirectory = @"Assets/Example/Assemblies",
+                            CreateDllAssetDirectoryIfNecessary = false
+                        }
+                    }
+                },
+                ["Full path to root directory of another unity project"] = new UnityProject
+                {
+                    PluginProjects = new Dictionary<string, UnityProject.PluginProject>
+                    {
+                        ["Full path to plugin project."] = new UnityProject.PluginProject
+                        {
+                            DllAssetDirectory = @"Assets/Example/Assemblies/Editor",
+                            CreateDllAssetDirectoryIfNecessary = false
+                        }
                     }
                 }
-            },
-            ["Full path to root directory of another unity project"] = new UnityProject
+            };
+
+            return new Config
             {
-                PluginProjects = new Dictionary<string, UnityProject.PluginProject>
-                {
-                    ["Full path to plugin project."] = new UnityProject.PluginProject
-                    {
-                        DllAssetDirectory = @"Assets/Example/Assemblies/Editor",
-                        CreateDllAssetDirectoryIfNecessary = false
-                    }
-                }
-            }
-        };
+                UnityPlugins = UnityPlugins.CreateTemplate(),
+                UnityProjects = unityProjects
+            };
+        }
+
+        #endregion Template
 
         #region Persistency
 
