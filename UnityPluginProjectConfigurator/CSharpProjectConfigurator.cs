@@ -70,10 +70,10 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Ensure.Argument.NotNull(project, nameof(project));
             Ensure.Argument.NotNull(parameter, nameof(parameter));
 
-            var configurationGroups = project.ParseConfigurationPropertyGroups(null).ToArray();
+            var configurationGroups = project.ParseConditionalConfigurationPropertyGroups((string)null).ToArray();
             if (parameter.RemoveExistedConfigurations)
             {
-                foreach (var group in configurationGroups.Select(p => p.Value))
+                foreach (var group in configurationGroups)
                     project.Xml.RemoveChild(group);
             }
 

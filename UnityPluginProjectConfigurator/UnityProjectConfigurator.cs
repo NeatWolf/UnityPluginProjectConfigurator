@@ -13,13 +13,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
     using XmlPropertyGroup = ProjectPropertyGroupElement;
     using ProjectConfigurationTypeTraits = EnumTraits<ProjectConfigurationType>;
     using SLNToolsProject = Project;
-    using MSBuildProject = Microsoft.Build.Evaluation.Project;
 
     public class UnityProjectConfigurator
     {
         public readonly string ProjectName;
         public readonly DirectoryInfo ProjectDirectory;
-        public UnityVersion ProjectVersion;
+        public readonly UnityVersion ProjectVersion;
 
         public readonly SolutionFile SolutionFile;
 
@@ -46,7 +45,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
             var newPath = Path.Combine(ProjectDirectory.FullName, Path.GetFileName(project.FilePath));
             project = VSProject.Clone(project, newPath, true);
-            project.Save();
 
             if (config.AddToSolution)
             {
@@ -58,9 +56,116 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 }
             }
 
-            if (!string.IsNullOrEmpty(config.DllAssetDirectory))
-                ConfigurePostBuildEvent(project, config);
+            RemoveRedundantPropertyGroups(project);
+            RemoveRedundantItemGroups(project);
+
+            ConfigurePropertyGroups(project,
+                DetermineOutputPath(config.OutputDirectory),
+                GetIntermediateOutputPath(project));
+
+            project.Save();
         }
+
+        private void RemoveRedundantPropertyGroups(VSProject project)
+        {
+            var removes = project
+                .ParseConditionalConfigurationPropertyGroups(IsRedundantConfiguration)
+                .Select(p => p.Value)
+                .ToArray();
+
+            foreach (var group in removes)
+                project.RemovePropertyGroup(group);
+        }
+
+        private void RemoveRedundantItemGroups(VSProject project)
+        {
+            var removes = project
+                .ParseConditionalConfigurationItemGroups(IsRedundantConfiguration)
+                .Select(p => p.Value)
+                .ToArray();
+
+            foreach (var group in removes)
+                project.RemoveItemGroup(group);
+        }
+
+        private bool IsRedundantConfiguration(string configuration)
+            => !VersionOfConfiguration(configuration).MajorEquals(ProjectVersion);
+
+        #region Output Directory
+
+        public const string DefaultOutputDirectory = @"Assets\Assemblies";
+
+        private void ConfigurePropertyGroups(VSProject project, string intermediateOutputPath, string outputPath)
+        {
+            foreach (var group in project.ParseConditionalConfigurationPropertyGroups((string)null))
+            {
+                group.SetProperty("IntermediateOutputPath", intermediateOutputPath);
+                group.SetProperty("OutputPath", outputPath);
+            }
+        }
+
+        private string GetIntermediateOutputPath(VSProject project) => $@"Temp\{project.Name}_obj";
+
+        private static string DetermineOutputPath(string configDirectory)
+        {
+            if (string.IsNullOrEmpty(configDirectory))
+                return DefaultOutputDirectory;
+
+            if (configDirectory.StartsWith("Assets"))
+                return configDirectory;
+
+            ConsoleLogger.WriteLine(LogLevel.Warn,
+                @"Default output directory is applied since it doesn't start with ""Assets"".");
+
+            return DefaultOutputDirectory;
+        }
+
+        #endregion Output Directory
+
+        #region Build Event
+
+        private void ConfigurePostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
+        {
+            var dllAssetDirectory = config.OutputDirectory;
+            if (string.IsNullOrEmpty(dllAssetDirectory))
+                return;
+
+            if (!dllAssetDirectory.StartsWith("Assets"))
+                throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
+
+            var assetDir = Path.Combine(ProjectDirectory.FullName, dllAssetDirectory);
+            assetDir = assetDir.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+            var copyCmd = $@"xcopy ""$(TargetDir)$(TargetName).*"" ""{assetDir}"" /i /y";
+            //if (!config.CreateDllAssetDirectoryIfNecessary)
+            //    copyCmd = $@"if exist ""{assetDir}"" ({copyCmd})";
+
+            // The approach below doesn't work since it add the property to existing PropertyGroup such as the
+            // PropertyGroup that contains ProjectGuid and AssemblyName, this is usually the first PropertyGroup in
+            // the .csproj file, and MSBuild evaluate $(TargetDir) and $(TargetName) as empty string. To ensure the
+            // macros available, we need to add the PostBuildEvent property after
+            // <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />.
+            //project.MSBuildProject.SetProperty("PostBuildEvent", copyCmd);
+
+            SetBuildEvent(project, "PostBuildEvent", copyCmd);
+        }
+
+        private static void SetBuildEvent(VSProject project, string name, string value)
+        {
+            // Remove old build event property if existed.
+            if (project.FindProperty(name, out var group, out var property))
+            {
+                group.RemoveChild(property);
+                if (group.Count == 0)
+                    project.Xml.RemoveChild(group);
+            }
+
+            // Add new build event property.
+            var buildEventGroup = project.CreatePropertyGroupAfter(project.MSBuildToolsImport);
+            buildEventGroup.AddProperty(name, value);
+        }
+
+        #endregion Build Event
 
         #region Solution
 
@@ -126,6 +231,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 });
         }
 
+        #endregion Solution
+
+        #endregion Configure
+
+        #region Utilities
+
         private static readonly Regex configurationRegex = new Regex(@"(?<cfg>\w+)-(?<ver>.+)");
 
         private static UnityVersion VersionOfConfiguration(string configuration)
@@ -133,57 +244,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
             var match = configurationRegex.Match(configuration);
             return !match.Success ? null : UnityVersion.Parse(match.Groups["ver"].Value);
         }
-
-        #endregion Solution
-
-        #region Build Event
-
-        private void ConfigurePostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
-        {
-            var dllAssetDirectory = config.DllAssetDirectory;
-            if (string.IsNullOrEmpty(dllAssetDirectory))
-                return;
-
-            if (!dllAssetDirectory.StartsWith("Assets"))
-                throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
-
-            var assetDir = Path.Combine(ProjectDirectory.FullName, dllAssetDirectory);
-            assetDir = assetDir.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-
-            var copyCmd = $@"xcopy ""$(TargetDir)$(TargetName).*"" ""{assetDir}"" /i /y";
-            if (!config.CreateDllAssetDirectoryIfNecessary)
-                copyCmd = $@"if exist ""{assetDir}"" ({copyCmd})";
-
-            // The approach below doesn't work since it add the property to existing PropertyGroup such as the
-            // PropertyGroup that contains ProjectGuid and AssemblyName, this is usually the first PropertyGroup in
-            // the .csproj file, and MSBuild evaluate $(TargetDir) and $(TargetName) as empty string. To ensure the
-            // macros available, we need to add the PostBuildEvent property after
-            // <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />.
-            //project.MSBuildProject.SetProperty("PostBuildEvent", copyCmd);
-
-            SetBuildEvent(project, "PostBuildEvent", copyCmd);
-        }
-
-        private static void SetBuildEvent(VSProject project, string name, string value)
-        {
-            // Remove old build event property if existed.
-            if (project.FindProperty(name, out var group, out var property))
-            {
-                group.RemoveChild(property);
-                if (group.Count == 0)
-                    project.Xml.RemoveChild(group);
-            }
-
-            // Add new build event property.
-            var buildEventGroup = project.CreatePropertyGroupAfter(project.MSBuildToolsImport);
-            buildEventGroup.AddProperty(name, value);
-        }
-
-        #endregion Build Event
-
-        #endregion Configure
-
-        #region Find Version
 
         private static readonly Regex UnityVersionRegex = new Regex(@"m_EditorVersion: (?<ver>\d+\.\d+\.*\d*\w*\d*)\Z");
 
@@ -200,6 +260,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
             return UnityVersion.Parse(ver);
         }
 
-        #endregion Find Version
+        #endregion Utilities
     }
 }

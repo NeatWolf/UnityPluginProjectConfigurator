@@ -33,8 +33,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
                     {
                         ["Full path to plugin project."] = new UnityProject.PluginProject
                         {
-                            DllAssetDirectory = @"Assets/Example/Assemblies",
-                            CreateDllAssetDirectoryIfNecessary = false
+                            OutputDirectory = @"Assets/Example/Assemblies",
                         }
                     }
                 },
@@ -44,8 +43,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
                     {
                         ["Full path to plugin project."] = new UnityProject.PluginProject
                         {
-                            DllAssetDirectory = @"Assets/Example/Assemblies/Editor",
-                            CreateDllAssetDirectoryIfNecessary = false
+                            OutputDirectory = @"Assets/Example/Assemblies/Editor",
                         }
                     }
                 }

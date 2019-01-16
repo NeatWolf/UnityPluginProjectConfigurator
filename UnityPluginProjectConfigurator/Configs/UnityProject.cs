@@ -18,9 +18,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         {
             public bool AddToSolution = true;
 
-            public string DllAssetDirectory;
-
-            public bool CreateDllAssetDirectoryIfNecessary = true;
+            public string OutputDirectory;
         }
     }
 }

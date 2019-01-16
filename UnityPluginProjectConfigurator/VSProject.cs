@@ -128,12 +128,17 @@ namespace ShuHai.UnityPluginProjectConfigurator
         public XmlPropertyGroup CreatePropertyGroupBefore(XmlElement beforeMe)
             => CreateAndInsertXmlElement(beforeMe, Xml.CreatePropertyGroupElement, Xml.InsertBeforeChild);
 
+        public void RemovePropertyGroup(XmlPropertyGroup group) => Xml.RemoveChild(group);
+
         private void InitializePropertyGroups()
         {
             DefaultPropertyGroup = FindPropertyGroup(g => g.Properties.Any(p => p.Name == "ProjectGuid"));
         }
 
         #region Conditional
+
+        public IEnumerable<XmlPropertyGroup> ParseConditionalConfigurationPropertyGroups(string configurationValue)
+            => ParseConditionalConfigurationElements(Xml.PropertyGroups, configurationValue);
 
         /// <summary>
         ///     Parse and enumerate conditional property groups which contains condition named
@@ -147,37 +152,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
         ///     to its corresponding property group pair.
         /// </returns>
         public IEnumerable<KeyValuePair<string, XmlPropertyGroup>>
-            ParseConfigurationPropertyGroups(Func<string, bool> configurationValuePredicate)
-        {
-            return ParseConditionalPropertyGroups(c => c.ContainsKey(ConditionNames.Configuration))
-                .Select(p => new KeyValuePair<string, XmlPropertyGroup>(p.Key[ConditionNames.Configuration], p.Value))
-                .Where(p => configurationValuePredicate == null || configurationValuePredicate(p.Key));
-        }
-
-        /// <summary>
-        ///     Enumerate conditional property groups that matching specified predicate, or enumerate all conditional property
-        ///     groups if specified predicate is <see langword="null" />.
-        /// </summary>
-        public IEnumerable<XmlPropertyGroup> FindConditionalPropertyGroups(Func<string, bool> predicate)
-        {
-            return Xml.PropertyGroups
-                .Where(g => !string.IsNullOrEmpty(g.Condition) && (predicate == null || predicate(g.Condition)));
-        }
+            ParseConditionalConfigurationPropertyGroups(Func<string, bool> configurationValuePredicate)
+            => ParseConditionalConfigurationElements(Xml.PropertyGroups, configurationValuePredicate);
 
         public IEnumerable<KeyValuePair<Conditions, XmlPropertyGroup>>
             ParseConditionalPropertyGroups(Func<Conditions, bool> predicate)
-        {
-            foreach (var group in Xml.PropertyGroups)
-            {
-                var conditionText = group.Condition;
-                if (string.IsNullOrEmpty(conditionText))
-                    continue;
-
-                var condition = new Conditions(ParseConditions(conditionText));
-                if (predicate == null || predicate(condition))
-                    yield return new KeyValuePair<Conditions, XmlPropertyGroup>(condition, group);
-            }
-        }
+            => ParseConditionalElements(Xml.PropertyGroups, predicate);
 
         #region Parse
 
@@ -418,11 +398,24 @@ namespace ShuHai.UnityPluginProjectConfigurator
         public IEnumerable<XmlItemGroup> FindItemGroups(Func<XmlItemGroup, bool> predicate)
             => Xml.ItemGroups.Where(predicate);
 
+        public IEnumerable<XmlItemGroup> ParseConditionalConfigurationItemGroups(string configurationValue)
+            => ParseConditionalConfigurationElements(Xml.ItemGroups, configurationValue);
+
+        public IEnumerable<KeyValuePair<string, XmlItemGroup>>
+            ParseConditionalConfigurationItemGroups(Func<string, bool> configurationValuePredicate)
+            => ParseConditionalConfigurationElements(Xml.ItemGroups, configurationValuePredicate);
+
+        public IEnumerable<KeyValuePair<Conditions, XmlItemGroup>>
+            ParseConditionalItemGroups(Func<Conditions, bool> predicate)
+            => ParseConditionalElements(Xml.ItemGroups, predicate);
+
         public XmlItemGroup CreateItemGroupAfter(XmlElement afterMe)
             => CreateAndInsertXmlElement(afterMe, Xml.CreateItemGroupElement, Xml.InsertAfterChild);
 
         public XmlItemGroup CreateItemGroupBefore(XmlElement beforeMe)
             => CreateAndInsertXmlElement(beforeMe, Xml.CreateItemGroupElement, Xml.InsertBeforeChild);
+
+        public void RemoveItemGroup(XmlItemGroup group) => Xml.RemoveChild(group);
 
         private void InitializeItemGroups()
         {
@@ -446,6 +439,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #endregion Imports
 
+        #region Utilities
+
         private T CreateAndInsertXmlElement<T>(XmlElement insertAnchor,
             Func<T> createMethod, Action<XmlElement, XmlElement> insertMethod)
             where T : XmlElement
@@ -458,6 +453,39 @@ namespace ShuHai.UnityPluginProjectConfigurator
             insertMethod(group, insertAnchor);
             return group;
         }
+
+        private static IEnumerable<T>
+            ParseConditionalConfigurationElements<T>(IEnumerable<T> elements, string configuraionValue)
+            where T : XmlElement
+        {
+            return ParseConditionalConfigurationElements(elements,
+                    configuraionValue == null ? (Func<string, bool>)null : c => c == configuraionValue)
+                .Select(kvp => kvp.Value);
+        }
+
+        private static IEnumerable<KeyValuePair<string, T>> ParseConditionalConfigurationElements<T>(
+            IEnumerable<T> elements, Func<string, bool> configuraionValuePredicate)
+            where T : XmlElement
+        {
+            return from kvp in ParseConditionalElements(elements, null)
+                let configurationValue = kvp.Key[ConditionNames.Configuration]
+                where configuraionValuePredicate == null || configuraionValuePredicate(configurationValue)
+                select new KeyValuePair<string, T>(configurationValue, kvp.Value);
+        }
+
+        private static IEnumerable<KeyValuePair<Conditions, T>>
+            ParseConditionalElements<T>(IEnumerable<T> elements, Func<Conditions, bool> predicate)
+            where T : XmlElement
+        {
+            return from e in elements
+                let conditionsText = e.Condition
+                where !string.IsNullOrEmpty(conditionsText)
+                let conditions = new Conditions(ParseConditions(conditionsText))
+                where predicate == null || predicate(conditions)
+                select new KeyValuePair<Conditions, T>(conditions, e);
+        }
+
+        #endregion Utilities
 
         #endregion Xml
 
