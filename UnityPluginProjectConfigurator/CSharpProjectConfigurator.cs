@@ -11,9 +11,9 @@ namespace ShuHai.UnityPluginProjectConfigurator
     using StringToVersionInfo = Dictionary<string, Configs.UnityManagedPluginProject.VersionInfo>;
     using XmlPropertyGroup = ProjectPropertyGroupElement;
     using XmlItemGroup = ProjectItemGroupElement;
-    using ConditionNames = CSharpProject.ConditionNames;
-    using Condition = CSharpProject.Condition;
-    using Conditions = CSharpProject.Conditions;
+    using ConditionNames = VSProject.ConditionNames;
+    using Condition = VSProject.Condition;
+    using Conditions = VSProject.Conditions;
 
     public static class CSharpProjectConfigurator
     {
@@ -65,7 +65,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Configure
 
-        public static void SetupUnityPluginProject(CSharpProject project, UnityPluginParameter parameter)
+        public static void SetupUnityPluginProject(VSProject project, UnityPluginParameter parameter)
         {
             Ensure.Argument.NotNull(project, nameof(project));
             Ensure.Argument.NotNull(parameter, nameof(parameter));

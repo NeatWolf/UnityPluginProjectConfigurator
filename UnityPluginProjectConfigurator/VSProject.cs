@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -17,27 +18,28 @@ namespace ShuHai.UnityPluginProjectConfigurator
     using XmlImport = ProjectImportElement;
     using StringPair = KeyValuePair<string, string>;
 
-    public sealed class CSharpProject : IDisposable
+    public sealed class VSProject : IDisposable
     {
         public readonly Project MSBuildProject;
 
-        public string Path => MSBuildProject.FullPath;
+        public string FilePath => MSBuildProject.FullPath;
+        public string DirectoryPath => MSBuildProject.DirectoryPath;
 
         public Guid Guid { get; private set; }
         public string Name { get; private set; }
 
         #region Initialization
 
-        private CSharpProject(string path)
+        private VSProject(string path)
             : this(ProjectCollection.GlobalProjectCollection, path) { }
 
-        private CSharpProject(ProjectCollection msBuildProjectCollection, string path)
+        private VSProject(ProjectCollection msBuildProjectCollection, string path)
         {
             MSBuildProject = msBuildProjectCollection.LoadProject(path);
             Initialize();
         }
 
-        private CSharpProject(Project msBuildProject)
+        private VSProject(Project msBuildProject)
         {
             MSBuildProject = msBuildProject ?? throw new ArgumentNullException(nameof(msBuildProject));
             Initialize();
@@ -46,7 +48,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
         private void Initialize()
         {
             Guid = new Guid(MSBuildProject.GetProperty("ProjectGuid").EvaluatedValue);
-            Name = System.IO.Path.GetFileNameWithoutExtension(MSBuildProject.FullPath);
+            Name = Path.GetFileNameWithoutExtension(MSBuildProject.FullPath);
 
             InitializePropertyGroups();
             InitializeItemGroups();
@@ -115,24 +117,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
         public XmlPropertyGroup DefaultPropertyGroup { get; private set; }
 
         public XmlPropertyGroup FindPropertyGroup(Func<XmlPropertyGroup, bool> predicate)
-        {
-            return Xml.PropertyGroups.FirstOrDefault(predicate);
-        }
+            => Xml.PropertyGroups.FirstOrDefault(predicate);
 
         public IEnumerable<XmlPropertyGroup> FindPropertyGroups(Func<XmlPropertyGroup, bool> predicate)
-        {
-            return Xml.PropertyGroups.Where(predicate);
-        }
+            => Xml.PropertyGroups.Where(predicate);
 
         public XmlPropertyGroup CreatePropertyGroupAfter(XmlElement afterMe)
-        {
-            return CreateAndInsertXmlElement(afterMe, Xml.CreatePropertyGroupElement, Xml.InsertAfterChild);
-        }
+            => CreateAndInsertXmlElement(afterMe, Xml.CreatePropertyGroupElement, Xml.InsertAfterChild);
 
         public XmlPropertyGroup CreatePropertyGroupBefore(XmlElement beforeMe)
-        {
-            return CreateAndInsertXmlElement(beforeMe, Xml.CreatePropertyGroupElement, Xml.InsertBeforeChild);
-        }
+            => CreateAndInsertXmlElement(beforeMe, Xml.CreatePropertyGroupElement, Xml.InsertBeforeChild);
 
         private void InitializePropertyGroups()
         {
@@ -406,29 +400,29 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #endregion Property Groups
 
+        #region Items
+
+        public XmlItem FindItem(Func<XmlItem, bool> predicate) => Xml.Items.FirstOrDefault(predicate);
+
+        public IEnumerable<XmlItem> FindItems(Func<XmlItem, bool> predicate) => Xml.Items.Where(predicate);
+
+        #endregion Items
+
         #region Item Groups
 
         public XmlItemGroup DefaultReferenceGroup { get; private set; }
 
         public XmlItemGroup FindItemGroup(Func<XmlItemGroup, bool> predicate)
-        {
-            return Xml.ItemGroups.FirstOrDefault(predicate);
-        }
+            => Xml.ItemGroups.FirstOrDefault(predicate);
 
         public IEnumerable<XmlItemGroup> FindItemGroups(Func<XmlItemGroup, bool> predicate)
-        {
-            return Xml.ItemGroups.Where(predicate);
-        }
+            => Xml.ItemGroups.Where(predicate);
 
         public XmlItemGroup CreateItemGroupAfter(XmlElement afterMe)
-        {
-            return CreateAndInsertXmlElement(afterMe, Xml.CreateItemGroupElement, Xml.InsertAfterChild);
-        }
+            => CreateAndInsertXmlElement(afterMe, Xml.CreateItemGroupElement, Xml.InsertAfterChild);
 
         public XmlItemGroup CreateItemGroupBefore(XmlElement beforeMe)
-        {
-            return CreateAndInsertXmlElement(beforeMe, Xml.CreateItemGroupElement, Xml.InsertBeforeChild);
-        }
+            => CreateAndInsertXmlElement(beforeMe, Xml.CreateItemGroupElement, Xml.InsertBeforeChild);
 
         private void InitializeItemGroups()
         {
@@ -471,9 +465,17 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public void Save()
         {
-            MSBuildProject.ReevaluateIfNecessary();
+            PrepareSave();
             MSBuildProject.Save();
         }
+
+        public void Save(string path)
+        {
+            PrepareSave();
+            MSBuildProject.Save(path);
+        }
+
+        private void PrepareSave() => MSBuildProject.ReevaluateIfNecessary();
 
         public static void SaveAll()
         {
@@ -485,26 +487,65 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Instances
 
-        public static IReadOnlyCollection<CSharpProject> Instances => instances.Values;
+        public static IReadOnlyCollection<VSProject> Instances => instances.Values;
+
+        public static VSProject Clone(VSProject project, string newPath, bool overwrite)
+        {
+            Ensure.Argument.NotNull(project, nameof(project));
+            Ensure.Argument.NotNullOrEmpty(newPath, nameof(newPath));
+
+            if (overwrite)
+            {
+                Unload(newPath);
+            }
+            else
+            {
+                if (instances.ContainsKey(newPath))
+                    throw new InvalidOperationException("Project at specified path already loaded.");
+                if (File.Exists(newPath))
+                    throw new InvalidOperationException("Project at specified path already existed.");
+            }
+
+            // Create new project instance.
+            var newXml = project.Xml.DeepClone();
+            newXml.FullPath = newPath;
+            var clonedProject = new VSProject(new Project(newXml));
+
+            // Convert path of sources.
+            var oldProjDir = project.DirectoryPath + Path.DirectorySeparatorChar;
+            var newProjDir = clonedProject.DirectoryPath + Path.DirectorySeparatorChar;
+            var items = clonedProject.FindItems(i => i.ElementName == "Compile");
+            foreach (var item in items)
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(oldProjDir, item.Include));
+                item.Include = PathEx.MakeRelativePath(newProjDir, fullPath);
+
+                var link = item.Metadata.FirstOrDefault(m => m.ElementName == "Link");
+                if (link == null)
+                    item.AddMetadata("Link", Path.GetFileName(item.Include));
+            }
+
+            return AddInstance(clonedProject);
+        }
 
         /// <summary>
         ///     Loads a project file at specifiled path anyway. If the project at specified path is already loaded, reloaed it.
         /// </summary>
         /// <param name="path">Path of the project file.</param>
-        /// <returns>A <see cref="CSharpProject" /> instance that represents the loaded project.</returns>
-        public static CSharpProject Load(string path)
+        /// <returns>A <see cref="VSProject" /> instance that represents the loaded project.</returns>
+        public static VSProject Load(string path)
         {
             if (instances.TryGetValue(path, out var instance))
                 UnloadImpl(path, instance);
             return LoadImpl(path);
         }
 
-        public static CSharpProject Get(string path)
+        public static VSProject Get(string path)
         {
             return instances.TryGetValue(path, out var instance) ? instance : null;
         }
 
-        public static CSharpProject GetOrLoad(string path)
+        public static VSProject GetOrLoad(string path)
         {
             return instances.TryGetValue(path, out var instance) ? instance : LoadImpl(path);
         }
@@ -519,20 +560,23 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public static void UnloadAll()
         {
-            foreach (var kvp in new Dictionary<string, CSharpProject>(instances))
+            foreach (var kvp in new Dictionary<string, VSProject>(instances))
                 UnloadImpl(kvp.Key, kvp.Value);
         }
 
-        private static readonly Dictionary<string, CSharpProject> instances = new Dictionary<string, CSharpProject>();
+        private static readonly Dictionary<string, VSProject> instances = new Dictionary<string, VSProject>();
 
-        private static CSharpProject LoadImpl(string path)
+        private static VSProject LoadImpl(string path) => AddInstance(new VSProject(path));
+
+        private static VSProject LoadImpl(ProjectRootElement xml) => AddInstance(new VSProject(new Project(xml)));
+
+        private static VSProject AddInstance(VSProject instance)
         {
-            var instance = new CSharpProject(path);
-            instances.Add(path, instance);
+            instances.Add(instance.FilePath, instance);
             return instance;
         }
 
-        private static void UnloadImpl(string path, CSharpProject instance)
+        private static void UnloadImpl(string path, VSProject instance)
         {
             instances.Remove(path);
             instance.Dispose();

@@ -13,6 +13,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
     using XmlPropertyGroup = ProjectPropertyGroupElement;
     using ProjectConfigurationTypeTraits = EnumTraits<ProjectConfigurationType>;
     using SLNToolsProject = Project;
+    using MSBuildProject = Microsoft.Build.Evaluation.Project;
 
     public class UnityProjectConfigurator
     {
@@ -36,19 +37,23 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Configure
 
-        public void AddCSharpProject(CSharpProject project, Configs.UnityProject.PluginProject config)
+        public void AddCSharpProject(VSProject project, Configs.UnityProject.PluginProject config)
         {
             if (project == null)
                 throw new ArgumentNullException(nameof(project));
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
 
+            var newPath = Path.Combine(ProjectDirectory.FullName, Path.GetFileName(project.FilePath));
+            project = VSProject.Clone(project, newPath, true);
+            project.Save();
+
             if (config.AddToSolution)
             {
                 var slnProj = AddProjectToSolutionFile(project);
                 if (slnProj == null)
                 {
-                    ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.Path}"" skipped.");
+                    ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.FilePath}"" skipped.");
                     return;
                 }
             }
@@ -59,7 +64,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Solution
 
-        public SLNToolsProject AddProjectToSolutionFile(CSharpProject project)
+        public SLNToolsProject AddProjectToSolutionFile(VSProject project)
         {
             var projectGuid = $"{{{project.Guid.ToString().ToUpper()}}}";
             var existedProj = SolutionFile.Projects.FirstOrDefault(
@@ -79,7 +84,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             {
                 var conditions = p.Key;
 
-                var configuration = conditions[CSharpProject.ConditionNames.Configuration];
+                var configuration = conditions[VSProject.ConditionNames.Configuration];
                 string slnCfg = null;
                 if (configuration.Contains("Debug"))
                     slnCfg = slnDebugCfg;
@@ -100,20 +105,20 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 projectGuid,
                 "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", // C# project type GUID.
                 project.Name,
-                PathEx.MakeRelativePath(SolutionFile.SolutionFullPath, project.Path),
+                PathEx.MakeRelativePath(SolutionFile.SolutionFullPath, project.FilePath),
                 null, null, null, projectConfigurations);
 
             SolutionFile.Projects.Add(slnProj);
             return slnProj;
         }
 
-        private IEnumerable<KeyValuePair<CSharpProject.Conditions, XmlPropertyGroup>>
-            SelectPropertyGroupsForSolution(CSharpProject project)
+        private IEnumerable<KeyValuePair<VSProject.Conditions, XmlPropertyGroup>>
+            SelectPropertyGroupsForSolution(VSProject project)
         {
             return project.ParseConditionalPropertyGroups(
                 c =>
                 {
-                    var configurationValue = c[CSharpProject.ConditionNames.Configuration];
+                    var configurationValue = c[VSProject.ConditionNames.Configuration];
                     var version = VersionOfConfiguration(configurationValue);
                     return version != null
                         ? version.MajorEquals(ProjectVersion)
@@ -133,7 +138,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Build Event
 
-        private void ConfigurePostBuildEvent(CSharpProject project, Configs.UnityProject.PluginProject config)
+        private void ConfigurePostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
         {
             var dllAssetDirectory = config.DllAssetDirectory;
             if (string.IsNullOrEmpty(dllAssetDirectory))
@@ -159,7 +164,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             SetBuildEvent(project, "PostBuildEvent", copyCmd);
         }
 
-        private static void SetBuildEvent(CSharpProject project, string name, string value)
+        private static void SetBuildEvent(VSProject project, string name, string value)
         {
             // Remove old build event property if existed.
             if (project.FindProperty(name, out var group, out var property))

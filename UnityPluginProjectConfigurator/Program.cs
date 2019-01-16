@@ -10,7 +10,11 @@ namespace ShuHai.UnityPluginProjectConfigurator
         private static void Main(string[] args)
         {
             Parser.Default.ParseArguments<CommandLineOptions>(args)
+#if DEBUG
                 .WithParsed(Run)
+#else
+                .WithParsed(TryRun)
+#endif
                 .WithNotParsed(HandleErrors);
 
             Console.Read();
@@ -20,15 +24,13 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void Run(CommandLineOptions options)
         {
-#if DEBUG
             RunImpl(options);
-#else
-            TryRun(options);
-#endif
+            VSProject.UnloadAll();
         }
 
         private static void TryRun(CommandLineOptions options)
         {
+            var errorOccus = false;
             try
             {
                 RunImpl(options);
@@ -36,12 +38,13 @@ namespace ShuHai.UnityPluginProjectConfigurator
             catch (Exception e)
             {
                 ConsoleLogger.WriteLine(LogLevel.Error, e);
+                errorOccus = true;
             }
             finally
             {
-                CSharpProject.UnloadAll();
+                VSProject.UnloadAll();
             }
-            ConsoleLogger.WriteLine("Done!");
+            ConsoleLogger.WriteLine(errorOccus ? "Error occurred..." : "Done!");
         }
 
         private static void RunImpl(CommandLineOptions options)
@@ -52,7 +55,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             ConfigureUnityPlugins(config.UnityPlugins);
             ConfigureUnityProjects(config.UnityProjects);
 
-            SaveProjects(CSharpProject.Instances);
+            SaveProjects(VSProject.Instances);
         }
 
         private static void ConfigureUnityPlugins(Configs.UnityPlugins config)
@@ -63,7 +66,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 ConsoleLogger.WriteLine($@"Configure c# project '{projPath}'.");
 
                 var parameter = CSharpProjectConfigurator.ParseUnityPluginParameter(config, kvp.Value);
-                CSharpProjectConfigurator.SetupUnityPluginProject(CSharpProject.GetOrLoad(projPath), parameter);
+                CSharpProjectConfigurator.SetupUnityPluginProject(VSProject.GetOrLoad(projPath), parameter);
             }
         }
 
@@ -78,16 +81,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
                 var configurator = new UnityProjectConfigurator(uprojPath);
                 foreach (var pkvp in uprojCfg.PluginProjects)
-                    configurator.AddCSharpProject(CSharpProject.GetOrLoad(pkvp.Key), pkvp.Value);
+                    configurator.AddCSharpProject(VSProject.GetOrLoad(pkvp.Key), pkvp.Value);
                 configurator.SaveSolution();
             }
         }
 
-        private static void SaveProjects(IEnumerable<CSharpProject> projects)
+        private static void SaveProjects(IEnumerable<VSProject> projects)
         {
             foreach (var proj in projects)
             {
-                ConsoleLogger.WriteLine($"Save project '{proj.Path}'");
+                ConsoleLogger.WriteLine($"Save project '{proj.FilePath}'");
                 proj.Save();
             }
         }
@@ -98,7 +101,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void HandleErrors(IEnumerable<Error> errors)
         {
-            ConsoleLogger.WriteLine("Command Line Errors:\n");
+            ConsoleLogger.WriteLine("Error occurs when parsing parameters:\n");
             foreach (var err in errors)
                 ConsoleLogger.WriteLine(LogLevel.Error, err);
         }

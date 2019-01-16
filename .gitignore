@@ -6,3 +6,5 @@ packages/
 UnityPluginProjectConfigurator/bin/
 
 UnityPluginProjectConfigurator/obj/
+
+*.user
