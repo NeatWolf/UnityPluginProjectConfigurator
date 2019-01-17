@@ -33,7 +33,21 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
                     {
                         ["Full path to plugin project."] = new UnityProject.PluginProject
                         {
-                            OutputDirectory = @"Assets/Example/Assemblies",
+                            Configurations = new Dictionary<string, string>
+                            {
+                                ["Debug"] = "Debug-2017.4",
+                                ["Release"] = "Release-2017.4"
+                            },
+                            DllAssetDirectory = @"Assets/Example/Assemblies"
+                        },
+                        ["Full path to c# project."] = new UnityProject.PluginProject
+                        {
+                            Configurations = new Dictionary<string, string>
+                            {
+                                ["Debug"] = "Debug",
+                                ["Release"] = "Release"
+                            },
+                            DllAssetDirectory = @"Assets/Example/Assemblies"
                         }
                     }
                 },
@@ -43,7 +57,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
                     {
                         ["Full path to plugin project."] = new UnityProject.PluginProject
                         {
-                            OutputDirectory = @"Assets/Example/Assemblies/Editor",
+                            DllAssetDirectory = @"Assets/Example/Assemblies/Editor",
                         }
                     }
                 }

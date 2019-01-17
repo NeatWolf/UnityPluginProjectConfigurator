@@ -18,7 +18,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         {
             public Dictionary<string, string> Configurations;
 
-            public string OutputDirectory;
+            public string DllAssetDirectory;
         }
     }
 }

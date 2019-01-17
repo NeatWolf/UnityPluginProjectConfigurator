@@ -12,7 +12,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
 {
     using XmlPropertyGroup = ProjectPropertyGroupElement;
     using XmlItemGroup = ProjectItemGroupElement;
-    using XmlPropertyGroupPair = KeyValuePair<VSProject.Conditions, ProjectPropertyGroupElement>;
     using ProjectConfigurationTypeTraits = EnumTraits<ProjectConfigurationType>;
     using SLNToolsProject = Project;
 
@@ -60,7 +59,10 @@ namespace ShuHai.UnityPluginProjectConfigurator
             project.RemoveItemGroups(redundantItemGroups);
 
             // Setup configuration groups.
-            SetupOutputPath(project, targetPropertyGroups, config.OutputDirectory);
+            SetupOutputPath(project, targetPropertyGroups);
+
+            // Setup build events.
+            SetupPostBuildEvent(project, config);
 
             project.Save();
 
@@ -148,36 +150,21 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Output Path
 
-        public const string DefaultOutputPath = @"Assets\Assemblies";
-
-        private static void SetupOutputPath(VSProject project,
-            XmlPropertyGroup[] targetPropertyGroups, string configOutputPath)
+        private static void SetupOutputPath(VSProject project, XmlPropertyGroup[] targetPropertyGroups)
         {
-            var intermediateOutputPath = GetIntermediateOutputPath(project);
-            var outputPath = DetermineOutputPath(configOutputPath);
             foreach (var type in ProjectConfigurationTypeTraits.Values)
             {
                 var group = targetPropertyGroups[(int)type];
-                group.SetProperty("IntermediateOutputPath", intermediateOutputPath);
-                group.SetProperty("OutputPath", outputPath);
+                group.SetProperty("IntermediateOutputPath", GetIntermediateOutputPath(project, type));
+                group.SetProperty("OutputPath", GetOutputPath(project, type));
             }
         }
 
-        private static string GetIntermediateOutputPath(VSProject project) => $@"Temp\{project.Name}_obj";
+        private static string GetIntermediateOutputPath(VSProject project, ProjectConfigurationType type)
+            => $@"Temp\{project.Name}_obj\{type}";
 
-        private static string DetermineOutputPath(string configOutputPath)
-        {
-            if (string.IsNullOrEmpty(configOutputPath))
-                return DefaultOutputPath;
-
-            if (configOutputPath.StartsWith("Assets"))
-                return configOutputPath;
-
-            ConsoleLogger.WriteLine(LogLevel.Warn,
-                @"Default output directory is applied since it doesn't start with ""Assets"".");
-
-            return DefaultOutputPath;
-        }
+        private static string GetOutputPath(VSProject project, ProjectConfigurationType type)
+            => $@"Temp\{project.Name}_bin\{type}";
 
         #endregion Output Path
 
@@ -185,14 +172,13 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Build Event Setup
 
+        public const string DefaultDllAssetDirectory = @"Assets\Assemblies";
+
         private void SetupPostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
         {
-            var dllAssetDirectory = config.OutputDirectory;
-            if (string.IsNullOrEmpty(dllAssetDirectory))
-                return;
-
+            var dllAssetDirectory = config.DllAssetDirectory ?? DefaultDllAssetDirectory;
             if (!dllAssetDirectory.StartsWith("Assets"))
-                throw new ArgumentException("Unity asset path expected.", nameof(dllAssetDirectory));
+                throw new ArgumentException("Unity asset path expected.", nameof(config.DllAssetDirectory));
 
             var assetDir = Path.Combine(ProjectDirectory.FullName, dllAssetDirectory);
             assetDir = assetDir.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
