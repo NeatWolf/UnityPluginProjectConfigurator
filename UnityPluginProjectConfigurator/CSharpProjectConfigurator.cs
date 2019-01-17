@@ -42,15 +42,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Ensure.Argument.NotNull(projectConfig, nameof(projectConfig));
 
             var versions = projectConfig.Versions ?? new StringToVersionInfo();
-            foreach (var kvp in configs.DefaultVersions)
+            if (projectConfig.UseDefaultVersionsAsFallback)
             {
-                var ver = kvp.Key;
-                var info = kvp.Value;
-                if (!versions.ContainsKey(ver))
-                    versions.Add(ver, info);
+                foreach (var kvp in configs.DefaultVersions)
+                {
+                    var ver = kvp.Key;
+                    var info = kvp.Value;
+                    if (!versions.ContainsKey(ver))
+                        versions.Add(ver, info);
+                }
             }
-            if (versions.Count == 0)
-                throw new ArgumentException("Versions of target project is not determined.");
 
             var parameter = new UnityPluginParameter
             {
@@ -70,16 +71,11 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Ensure.Argument.NotNull(project, nameof(project));
             Ensure.Argument.NotNull(parameter, nameof(parameter));
 
-            var configurationGroups = project.ParseConditionalConfigurationPropertyGroups((string)null).ToArray();
             if (parameter.RemoveExistedConfigurations)
             {
-                foreach (var group in configurationGroups)
-                    project.Xml.RemoveChild(group);
+                project.RemovePropertyGroups(project.ParseConditionalConfigurationPropertyGroups((string)null));
+                project.RemoveItemGroups(project.ParseConditionalConfigurationItemGroups((string)null));
             }
-
-            var conditionalItemGroups = project.FindItemGroups(g => !string.IsNullOrEmpty(g.Condition)).ToArray();
-            foreach (var group in conditionalItemGroups)
-                project.Xml.RemoveChild(group);
 
             var propertyGroupAnchor = project.DefaultPropertyGroup;
             var itemGroupAnchor = project.DefaultReferenceGroup;

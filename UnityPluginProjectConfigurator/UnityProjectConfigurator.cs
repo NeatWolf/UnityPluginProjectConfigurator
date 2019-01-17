@@ -11,6 +11,8 @@ using SolutionFile = CWDev.SLNTools.Core.SolutionFile;
 namespace ShuHai.UnityPluginProjectConfigurator
 {
     using XmlPropertyGroup = ProjectPropertyGroupElement;
+    using XmlItemGroup = ProjectItemGroupElement;
+    using XmlPropertyGroupPair = KeyValuePair<VSProject.Conditions, ProjectPropertyGroupElement>;
     using ProjectConfigurationTypeTraits = EnumTraits<ProjectConfigurationType>;
     using SLNToolsProject = Project;
 
@@ -43,88 +45,147 @@ namespace ShuHai.UnityPluginProjectConfigurator
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
 
+            // Clone a new project for modification for solution.
             var newPath = Path.Combine(ProjectDirectory.FullName, Path.GetFileName(project.FilePath));
             project = VSProject.Clone(project, newPath, true);
 
-            if (config.AddToSolution)
-            {
-                var slnProj = AddProjectToSolutionFile(project);
-                if (slnProj == null)
-                {
-                    ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.FilePath}"" skipped.");
-                    return;
-                }
-            }
+            // Select configuration groups of the project for solution.
+            var targetConfigurations = SelectConfigurationsForSolution(project, config.Configurations);
+            SelectConfigurationPropertyGroups(project, targetConfigurations,
+                out var targetPropertyGroups, out var redundantPropertyGroups);
+            SelectConfigurationItemGroups(project, targetConfigurations, out _, out var redundantItemGroups);
 
-            RemoveRedundantPropertyGroups(project);
-            RemoveRedundantItemGroups(project);
+            // Remove redundant configuration groups.
+            project.RemovePropertyGroups(redundantPropertyGroups);
+            project.RemoveItemGroups(redundantItemGroups);
 
-            ConfigurePropertyGroups(project,
-                DetermineOutputPath(config.OutputDirectory),
-                GetIntermediateOutputPath(project));
+            // Setup configuration groups.
+            SetupOutputPath(project, targetPropertyGroups, config.OutputDirectory);
 
             project.Save();
+
+            var slnProj = AddProjectToSolutionFile(project, targetPropertyGroups);
+            if (slnProj == null)
+                ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.FilePath}"" skipped.");
         }
 
-        private void RemoveRedundantPropertyGroups(VSProject project)
+        #region Configuration Groups Selection
+
+        private string[] SelectConfigurationsForSolution(VSProject project, IReadOnlyDictionary<string, string> config)
         {
-            var removes = project
-                .ParseConditionalConfigurationPropertyGroups(IsRedundantConfiguration)
-                .Select(p => p.Value)
-                .ToArray();
-
-            foreach (var group in removes)
-                project.RemovePropertyGroup(group);
-        }
-
-        private void RemoveRedundantItemGroups(VSProject project)
-        {
-            var removes = project
-                .ParseConditionalConfigurationItemGroups(IsRedundantConfiguration)
-                .Select(p => p.Value)
-                .ToArray();
-
-            foreach (var group in removes)
-                project.RemoveItemGroup(group);
-        }
-
-        private bool IsRedundantConfiguration(string configuration)
-            => !VersionOfConfiguration(configuration).MajorEquals(ProjectVersion);
-
-        #region Output Directory
-
-        public const string DefaultOutputDirectory = @"Assets\Assemblies";
-
-        private void ConfigurePropertyGroups(VSProject project, string intermediateOutputPath, string outputPath)
-        {
-            foreach (var group in project.ParseConditionalConfigurationPropertyGroups((string)null))
+            var configurations = project.MSBuildProject.ConditionedProperties[VSProject.ConditionNames.Configuration];
+            return new[]
             {
+                FindConfigurationForSolution(configurations, ProjectConfigurationType.Debug, config),
+                FindConfigurationForSolution(configurations, ProjectConfigurationType.Release, config)
+            };
+        }
+
+        private string FindConfigurationForSolution(
+            IEnumerable<string> configurations, ProjectConfigurationType type,
+            IReadOnlyDictionary<string, string> config)
+        {
+            var typeStr = type.ToString();
+
+            // Find in config.
+            if (config != null && config.TryGetValue(typeStr, out var targetConfiguration))
+            {
+                if (configurations.Contains(targetConfiguration))
+                    return targetConfiguration;
+            }
+
+            // Find according to default rule.
+            configurations = configurations.Where(c => c.StartsWith(typeStr));
+            foreach (var configuration in configurations)
+            {
+                var version = VersionOfConfiguration(configuration);
+                if (version != null && version.MajorEquals(ProjectVersion))
+                    return configuration;
+            }
+            return configurations.FirstOrDefault();
+        }
+
+        private static void SelectConfigurationPropertyGroups(
+            VSProject project, string[] selectedConfigurations,
+            out XmlPropertyGroup[] selectedGroups, out XmlPropertyGroup[] redundantGroups)
+        {
+            SelectConfigurationElements(
+                project.ParseConditionalConfigurationPropertyGroups((Func<string, bool>)null),
+                selectedConfigurations, out selectedGroups, out redundantGroups);
+        }
+
+        public static void SelectConfigurationItemGroups(
+            VSProject project, string[] selectedConfigurations,
+            out XmlItemGroup[] selectedGroups, out XmlItemGroup[] redundantGroups)
+        {
+            SelectConfigurationElements(
+                project.ParseConditionalConfigurationItemGroups((Func<string, bool>)null),
+                selectedConfigurations, out selectedGroups, out redundantGroups);
+        }
+
+        private static void SelectConfigurationElements<T>(
+            IEnumerable<KeyValuePair<string, T>> allElements, string[] selectedConfigurations,
+            out T[] selectedElements, out T[] redundantElements)
+            where T : ProjectElement
+        {
+            selectedElements = new T[selectedConfigurations.Length];
+            var redundantGroupList = new List<T>();
+            foreach (var kvp in allElements)
+            {
+                var group = kvp.Value;
+                var configurationIndex = Array.IndexOf(selectedConfigurations, kvp.Key);
+                if (configurationIndex >= 0)
+                    selectedElements[configurationIndex] = group;
+                else
+                    redundantGroupList.Add(group);
+            }
+            redundantElements = redundantGroupList.ToArray();
+        }
+
+        #endregion Configuration Groups Selection
+
+        #region Configuration Groups Setup
+
+        #region Output Path
+
+        public const string DefaultOutputPath = @"Assets\Assemblies";
+
+        private static void SetupOutputPath(VSProject project,
+            XmlPropertyGroup[] targetPropertyGroups, string configOutputPath)
+        {
+            var intermediateOutputPath = GetIntermediateOutputPath(project);
+            var outputPath = DetermineOutputPath(configOutputPath);
+            foreach (var type in ProjectConfigurationTypeTraits.Values)
+            {
+                var group = targetPropertyGroups[(int)type];
                 group.SetProperty("IntermediateOutputPath", intermediateOutputPath);
                 group.SetProperty("OutputPath", outputPath);
             }
         }
 
-        private string GetIntermediateOutputPath(VSProject project) => $@"Temp\{project.Name}_obj";
+        private static string GetIntermediateOutputPath(VSProject project) => $@"Temp\{project.Name}_obj";
 
-        private static string DetermineOutputPath(string configDirectory)
+        private static string DetermineOutputPath(string configOutputPath)
         {
-            if (string.IsNullOrEmpty(configDirectory))
-                return DefaultOutputDirectory;
+            if (string.IsNullOrEmpty(configOutputPath))
+                return DefaultOutputPath;
 
-            if (configDirectory.StartsWith("Assets"))
-                return configDirectory;
+            if (configOutputPath.StartsWith("Assets"))
+                return configOutputPath;
 
             ConsoleLogger.WriteLine(LogLevel.Warn,
                 @"Default output directory is applied since it doesn't start with ""Assets"".");
 
-            return DefaultOutputDirectory;
+            return DefaultOutputPath;
         }
 
-        #endregion Output Directory
+        #endregion Output Path
 
-        #region Build Event
+        #endregion Configuration Groups Setup
 
-        private void ConfigurePostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
+        #region Build Event Setup
+
+        private void SetupPostBuildEvent(VSProject project, Configs.UnityProject.PluginProject config)
         {
             var dllAssetDirectory = config.OutputDirectory;
             if (string.IsNullOrEmpty(dllAssetDirectory))
@@ -165,11 +226,11 @@ namespace ShuHai.UnityPluginProjectConfigurator
             buildEventGroup.AddProperty(name, value);
         }
 
-        #endregion Build Event
+        #endregion Build Event Setup
 
         #region Solution
 
-        public SLNToolsProject AddProjectToSolutionFile(VSProject project)
+        public SLNToolsProject AddProjectToSolutionFile(VSProject project, XmlPropertyGroup[] targetPropertyGroups)
         {
             var projectGuid = $"{{{project.Guid.ToString().ToUpper()}}}";
             var existedProj = SolutionFile.Projects.FirstOrDefault(
@@ -177,58 +238,54 @@ namespace ShuHai.UnityPluginProjectConfigurator
             if (existedProj != null)
                 return existedProj;
 
-            var projectConfigurationGroups = SelectPropertyGroupsForSolution(project);
+            var projectConfigurationConditions = targetPropertyGroups
+                .Select(g => VSProject.Conditions.Parse(g.Condition)).ToArray();
+            var solutionConfigurations = ParseSolutionConfigurations();
 
-            var solutionConfigurations = SolutionFile.GlobalSections
-                .First(s => s.Name == "SolutionConfigurationPlatforms").PropertyLines;
-            string slnDebugCfg = solutionConfigurations.First(p => p.Name.Contains("Debug")).Value;
-            string slnReleaseCfg = solutionConfigurations.First(p => p.Name.Contains("Release")).Value;
-
-            var projectConfigurations = new List<PropertyLine>();
-            foreach (var p in projectConfigurationGroups)
-            {
-                var conditions = p.Key;
-
-                var configuration = conditions[VSProject.ConditionNames.Configuration];
-                string slnCfg = null;
-                if (configuration.Contains("Debug"))
-                    slnCfg = slnDebugCfg;
-                else if (configuration.Contains("Release"))
-                    slnCfg = slnReleaseCfg;
-                if (slnCfg == null)
-                    throw new ArgumentException("Appropriate project configuration for solution not found.");
-
-                var valuesText = conditions.ValuesString;
-                valuesText = valuesText.Replace("AnyCPU", "Any CPU");
-                projectConfigurations.Add(new PropertyLine(
-                    $@"{slnCfg}.ActiveCfg", valuesText));
-                projectConfigurations.Add(new PropertyLine(
-                    $@"{slnCfg}.Build.0", valuesText));
-            }
+            var projectConfigurationsLines =
+                CreateProjectConfigurationPropertyLines(solutionConfigurations, projectConfigurationConditions);
 
             var slnProj = new SLNToolsProject(SolutionFile,
                 projectGuid,
                 "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", // C# project type GUID.
                 project.Name,
                 PathEx.MakeRelativePath(SolutionFile.SolutionFullPath, project.FilePath),
-                null, null, null, projectConfigurations);
+                null, null, null, projectConfigurationsLines);
 
             SolutionFile.Projects.Add(slnProj);
             return slnProj;
         }
 
-        private IEnumerable<KeyValuePair<VSProject.Conditions, XmlPropertyGroup>>
-            SelectPropertyGroupsForSolution(VSProject project)
+        private string[] ParseSolutionConfigurations()
         {
-            return project.ParseConditionalPropertyGroups(
-                c =>
-                {
-                    var configurationValue = c[VSProject.ConditionNames.Configuration];
-                    var version = VersionOfConfiguration(configurationValue);
-                    return version != null
-                        ? version.MajorEquals(ProjectVersion)
-                        : ProjectConfigurationTypeTraits.Names.Contains(configurationValue);
-                });
+            var configurationLines = SolutionFile.GlobalSections
+                .First(s => s.Name == "SolutionConfigurationPlatforms").PropertyLines;
+
+            var configurations = new string[ProjectConfigurationTypeTraits.ValueCount];
+            for (int i = 0; i < ProjectConfigurationTypeTraits.ValueCount; ++i)
+            {
+                var typeName = ProjectConfigurationTypeTraits.GetName(i);
+                configurations[i] = configurationLines.First(l => l.Name.Contains(typeName)).Value;
+            }
+            return configurations;
+        }
+
+        private List<PropertyLine> CreateProjectConfigurationPropertyLines(
+            string[] solutionConfigurations, VSProject.Conditions[] projectConfigurationConditions)
+        {
+            var lines = new List<PropertyLine>();
+            for (int i = 0; i < ProjectConfigurationTypeTraits.ValueCount; ++i)
+            {
+                var projectConfigurationCondition = projectConfigurationConditions[i];
+                var solutionConfiguration = solutionConfigurations[i];
+
+                var valuesText = projectConfigurationCondition.ValuesString;
+                valuesText = valuesText.Replace("AnyCPU", "Any CPU");
+
+                lines.Add(new PropertyLine($"{solutionConfiguration}.ActiveCfg", valuesText));
+                lines.Add(new PropertyLine($"{solutionConfiguration}.Build.0", valuesText));
+            }
+            return lines;
         }
 
         #endregion Solution

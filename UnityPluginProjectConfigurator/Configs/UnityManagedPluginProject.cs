@@ -26,6 +26,8 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         /// </summary>
         public VersionInfoDict Versions;
 
+        public bool UseDefaultVersionsAsFallback = true;
+
         public class VersionInfo
         {
             public AssemblyReference[] AssemblyReferences;

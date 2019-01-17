@@ -16,7 +16,7 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
 
         public class PluginProject
         {
-            public bool AddToSolution = true;
+            public Dictionary<string, string> Configurations;
 
             public string OutputDirectory;
         }

@@ -130,6 +130,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public void RemovePropertyGroup(XmlPropertyGroup group) => Xml.RemoveChild(group);
 
+        public void RemovePropertyGroups(IEnumerable<XmlPropertyGroup> groups)
+        {
+            foreach (var group in groups.ToArray())
+                RemovePropertyGroup(group);
+        }
+
         private void InitializePropertyGroups()
         {
             DefaultPropertyGroup = FindPropertyGroup(g => g.Properties.Any(p => p.Name == "ProjectGuid"));
@@ -159,48 +165,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
             ParseConditionalPropertyGroups(Func<Conditions, bool> predicate)
             => ParseConditionalElements(Xml.PropertyGroups, predicate);
 
-        #region Parse
-
-        /// <summary>
-        ///     Parse the specified condition text and get condition value with specified name.
-        /// </summary>
-        /// <param name="text">Condition text to parse.</param>
-        /// <param name="name">Name of the condition.</param>
-        /// <returns>
-        ///     Value of the condition with specified <paramref name="name" />, or <see langword="null" /> if condition with
-        ///     specified <paramref name="name" /> doesn't exist.
-        /// </returns>
-        public static string ParseCondition(string text, string name)
-        {
-            return ParseConditions(text).FirstOrDefault(c => c.Name == name).Value;
-        }
-
-        public static IEnumerable<Condition> ParseConditions(string text)
-        {
-            var match = conditionRegex.Match(text);
-            if (!match.Success)
-                throw new ArgumentException("Invalid format of condition text.", nameof(text));
-
-            var names = match.Groups["Names"].Value.Split('|');
-            var values = match.Groups["Values"].Value.Split('|');
-            int count = names.Length;
-            if (count != values.Length)
-                throw new ArgumentException("Number of configuration and its value does not match.", nameof(text));
-
-            for (int i = 0; i < count; ++i)
-            {
-                var nameMatch = configurationNameRegex.Match(names[i]);
-                if (!nameMatch.Success)
-                    throw new ArgumentException("Invalid format of configuration name.", nameof(text));
-                yield return new Condition(nameMatch.Groups["Name"].Value, values[i]);
-            }
-        }
-
-        private static readonly Regex conditionRegex = new Regex(@"\'(?<Names>.+)\'\s*==\s*\'(?<Values>.*)\'");
-        private static readonly Regex configurationNameRegex = new Regex(@"\$\((?<Name>\w+)\)");
-
-        #endregion Parse
-
         public static class ConditionNames
         {
             public const string Configuration = "Configuration";
@@ -211,6 +175,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
         {
             public readonly string Name;
             public readonly string Value;
+
+            #region Constructors
 
             public Condition(string name, string value)
             {
@@ -225,6 +191,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 Value = condition.Value;
                 hashCode = HashCode.Get(Name, Value);
             }
+
+            #endregion Constructors
 
             #region Equality
 
@@ -257,6 +225,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
             public IEnumerable<string> Keys => dict.Keys;
             public IEnumerable<string> Values => dict.Values;
 
+            #region Constructors
+
             public Conditions() : this((IEnumerable<Condition>)null) { }
 
             public Conditions(IEnumerable<StringPair> conditions)
@@ -283,6 +253,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 hashCode = HashCode.Get(list);
             }
 
+            #endregion Constructors
+
             public bool ContainsKey(string key) { return dict.ContainsKey(key); }
 
             public bool TryGetValue(string key, out string value) { return dict.TryGetValue(key, out value); }
@@ -291,6 +263,36 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
             private readonly IReadOnlyDictionary<string, string> dict;
             private readonly IReadOnlyList<Condition> list;
+
+            #region Parse
+
+            public static Conditions Parse(string text) { return new Conditions(ParseAndEnumerate(text)); }
+
+            public static IEnumerable<Condition> ParseAndEnumerate(string text)
+            {
+                var match = conditionRegex.Match(text);
+                if (!match.Success)
+                    throw new ArgumentException("Invalid format of condition text.", nameof(text));
+
+                var names = match.Groups["Names"].Value.Split('|');
+                var values = match.Groups["Values"].Value.Split('|');
+                int count = names.Length;
+                if (count != values.Length)
+                    throw new ArgumentException("Number of configuration and its value does not match.", nameof(text));
+
+                for (int i = 0; i < count; ++i)
+                {
+                    var nameMatch = configurationNameRegex.Match(names[i]);
+                    if (!nameMatch.Success)
+                        throw new ArgumentException("Invalid format of configuration name.", nameof(text));
+                    yield return new Condition(nameMatch.Groups["Name"].Value, values[i]);
+                }
+            }
+
+            private static readonly Regex conditionRegex = new Regex(@"\'(?<Names>.+)\'\s*==\s*\'(?<Values>.*)\'");
+            private static readonly Regex configurationNameRegex = new Regex(@"\$\((?<Name>\w+)\)");
+
+            #endregion Parse
 
             #region Strings
 
@@ -417,6 +419,12 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public void RemoveItemGroup(XmlItemGroup group) => Xml.RemoveChild(group);
 
+        public void RemoveItemGroups(IEnumerable<XmlItemGroup> groups)
+        {
+            foreach (var group in groups.ToArray())
+                Xml.RemoveChild(group);
+        }
+
         private void InitializeItemGroups()
         {
             DefaultReferenceGroup = FindItemGroup(g => g.Items.Any(i => i.Include == "System"));
@@ -441,6 +449,37 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Utilities
 
+        public static IEnumerable<T>
+            ParseConditionalConfigurationElements<T>(IEnumerable<T> elements, string configuraionValue)
+            where T : XmlElement
+        {
+            return ParseConditionalConfigurationElements(elements,
+                    configuraionValue == null ? (Func<string, bool>)null : c => c == configuraionValue)
+                .Select(kvp => kvp.Value);
+        }
+
+        public static IEnumerable<KeyValuePair<string, T>> ParseConditionalConfigurationElements<T>(
+            IEnumerable<T> elements, Func<string, bool> configuraionValuePredicate)
+            where T : XmlElement
+        {
+            return from kvp in ParseConditionalElements(elements, null)
+                let configurationValue = kvp.Key[ConditionNames.Configuration]
+                where configuraionValuePredicate == null || configuraionValuePredicate(configurationValue)
+                select new KeyValuePair<string, T>(configurationValue, kvp.Value);
+        }
+
+        public static IEnumerable<KeyValuePair<Conditions, T>>
+            ParseConditionalElements<T>(IEnumerable<T> elements, Func<Conditions, bool> predicate)
+            where T : XmlElement
+        {
+            return from e in elements
+                let conditionsText = e.Condition
+                where !string.IsNullOrEmpty(conditionsText)
+                let conditions = new Conditions(Conditions.ParseAndEnumerate(conditionsText))
+                where predicate == null || predicate(conditions)
+                select new KeyValuePair<Conditions, T>(conditions, e);
+        }
+
         private T CreateAndInsertXmlElement<T>(XmlElement insertAnchor,
             Func<T> createMethod, Action<XmlElement, XmlElement> insertMethod)
             where T : XmlElement
@@ -452,37 +491,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
             var group = createMethod();
             insertMethod(group, insertAnchor);
             return group;
-        }
-
-        private static IEnumerable<T>
-            ParseConditionalConfigurationElements<T>(IEnumerable<T> elements, string configuraionValue)
-            where T : XmlElement
-        {
-            return ParseConditionalConfigurationElements(elements,
-                    configuraionValue == null ? (Func<string, bool>)null : c => c == configuraionValue)
-                .Select(kvp => kvp.Value);
-        }
-
-        private static IEnumerable<KeyValuePair<string, T>> ParseConditionalConfigurationElements<T>(
-            IEnumerable<T> elements, Func<string, bool> configuraionValuePredicate)
-            where T : XmlElement
-        {
-            return from kvp in ParseConditionalElements(elements, null)
-                let configurationValue = kvp.Key[ConditionNames.Configuration]
-                where configuraionValuePredicate == null || configuraionValuePredicate(configurationValue)
-                select new KeyValuePair<string, T>(configurationValue, kvp.Value);
-        }
-
-        private static IEnumerable<KeyValuePair<Conditions, T>>
-            ParseConditionalElements<T>(IEnumerable<T> elements, Func<Conditions, bool> predicate)
-            where T : XmlElement
-        {
-            return from e in elements
-                let conditionsText = e.Condition
-                where !string.IsNullOrEmpty(conditionsText)
-                let conditions = new Conditions(ParseConditions(conditionsText))
-                where predicate == null || predicate(conditions)
-                select new KeyValuePair<Conditions, T>(conditions, e);
         }
 
         #endregion Utilities
