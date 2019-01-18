@@ -23,8 +23,6 @@ namespace ShuHai.UnityPluginProjectConfigurator
         {
             public bool ForEditor;
 
-            public bool RemoveExistedConfigurations = true;
-
             public VersionToInfo Versions;
         }
 
@@ -41,9 +39,10 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Ensure.Argument.NotNull(configs, nameof(configs));
             Ensure.Argument.NotNull(projectConfig, nameof(projectConfig));
 
-            var versions = projectConfig.Versions ?? new StringToVersionInfo();
-            if (projectConfig.UseDefaultVersionsAsFallback)
+            StringToVersionInfo versions = null;
+            if (projectConfig.ForMultipleVersions)
             {
+                versions = projectConfig.Versions ?? new StringToVersionInfo();
                 foreach (var kvp in configs.DefaultVersions)
                 {
                     var ver = kvp.Key;
@@ -56,8 +55,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             var parameter = new UnityPluginParameter
             {
                 ForEditor = projectConfig.ForEditor,
-                RemoveExistedConfigurations = projectConfig.RemoveExistedConfigurations,
-                Versions = versions.ToDictionary(p => UnityVersion.Parse(p.Key), p => p.Value),
+                Versions = versions?.ToDictionary(p => UnityVersion.Parse(p.Key), p => p.Value)
             };
             return parameter;
         }
@@ -71,15 +69,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
             Ensure.Argument.NotNull(project, nameof(project));
             Ensure.Argument.NotNull(parameter, nameof(parameter));
 
-            if (parameter.RemoveExistedConfigurations)
-            {
-                project.RemovePropertyGroups(project.ParseConditionalConfigurationPropertyGroups((string)null));
-                project.RemoveItemGroups(project.ParseConditionalConfigurationItemGroups((string)null));
-            }
+            var versions = parameter.Versions;
+            if (versions == null)
+                return;
+
+            project.RemovePropertyGroups(project.ParseConditionalConfigurationPropertyGroups((string)null));
+            project.RemoveItemGroups(project.ParseConditionalConfigurationItemGroups((string)null));
 
             var propertyGroupAnchor = project.DefaultPropertyGroup;
             var itemGroupAnchor = project.DefaultReferenceGroup;
-            foreach (var kvp in parameter.Versions)
+            foreach (var kvp in versions)
             {
                 var ver = kvp.Key;
                 var info = kvp.Value;

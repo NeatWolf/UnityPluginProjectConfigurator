@@ -26,7 +26,10 @@ namespace ShuHai.UnityPluginProjectConfigurator
         public string DirectoryPath => MSBuildProject.DirectoryPath;
 
         public Guid Guid { get; private set; }
+        public string GuidText { get; private set; }
         public string Name { get; private set; }
+
+        public override string ToString() => FilePath;
 
         #region Initialization
 
@@ -47,7 +50,8 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private void Initialize()
         {
-            Guid = new Guid(MSBuildProject.GetProperty("ProjectGuid").EvaluatedValue);
+            GuidText = MSBuildProject.GetProperty("ProjectGuid").EvaluatedValue;
+            Guid = new Guid(GuidText);
             Name = Path.GetFileNameWithoutExtension(MSBuildProject.FullPath);
 
             InitializePropertyGroups();
@@ -386,7 +390,16 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public XmlItem FindItem(Func<XmlItem, bool> predicate) => Xml.Items.FirstOrDefault(predicate);
 
+        public IEnumerable<XmlItem> FindItems(string name)
+            => Xml.Items.Where(i => name == null || name == i.ElementName);
+
         public IEnumerable<XmlItem> FindItems(Func<XmlItem, bool> predicate) => Xml.Items.Where(predicate);
+
+        public IEnumerable<XmlItem> FindCompiles(Func<XmlItem, bool> predicate)
+            => FindItems(i => i.ElementName == "Compile" && (predicate == null || predicate(i)));
+
+        public IEnumerable<XmlItem> FindProjectReferences(Func<XmlItem, bool> predicate)
+            => FindItems(i => i.ElementName == "ProjectReference" && (predicate == null || predicate(i)));
 
         #endregion Items
 
@@ -521,9 +534,15 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #endregion Persistency
 
-        #region Instances
+        #region Clone
 
-        public static IReadOnlyCollection<VSProject> Instances => instances.Values;
+        public bool IsCloned => CloneSourcePath != null;
+
+        /// <summary>
+        ///     Indicates from which project the current instance is cloned from if not <see langword="null" />, or the current
+        ///     instance isn't cloned from any project.
+        /// </summary>
+        public string CloneSourcePath { get; private set; }
 
         public static VSProject Clone(VSProject project, string newPath, bool overwrite)
         {
@@ -543,26 +562,45 @@ namespace ShuHai.UnityPluginProjectConfigurator
             }
 
             // Create new project instance.
+            var newGuidText = $@"{{{Guid.NewGuid().ToString().ToUpper()}}}";
             var newXml = project.Xml.DeepClone();
             newXml.FullPath = newPath;
-            var clonedProject = new VSProject(new Project(newXml));
+            newXml.Properties.First(p => p.ElementName == "ProjectGuid").Value = newGuidText;
+            var newProj = new VSProject(new Project(newXml));
+
+            // Prepare data for following process.
+            var oldProjDir = project.DirectoryPath + Path.DirectorySeparatorChar;
+            var newProjDir = newProj.DirectoryPath + Path.DirectorySeparatorChar;
 
             // Convert path of sources.
-            var oldProjDir = project.DirectoryPath + Path.DirectorySeparatorChar;
-            var newProjDir = clonedProject.DirectoryPath + Path.DirectorySeparatorChar;
-            var items = clonedProject.FindItems(i => i.ElementName == "Compile");
-            foreach (var item in items)
+            var compileItems = newProj.FindCompiles(null);
+            foreach (var item in compileItems)
             {
                 var fullPath = Path.GetFullPath(Path.Combine(oldProjDir, item.Include));
-                item.Include = PathEx.MakeRelativePath(newProjDir, fullPath);
+                item.Include = PathEx.MakeRelative(newProjDir, fullPath);
 
                 var link = item.Metadata.FirstOrDefault(m => m.ElementName == "Link");
                 if (link == null)
                     item.AddMetadata("Link", Path.GetFileName(item.Include));
             }
 
-            return AddInstance(clonedProject);
+            // Convert path of project references.
+            var projRefItems = newProj.FindProjectReferences(null);
+            foreach (var item in projRefItems)
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(oldProjDir, item.Include));
+                item.Include = PathEx.MakeRelative(newProjDir, fullPath);
+            }
+
+            newProj.CloneSourcePath = project.FilePath;
+            return AddInstance(newProj);
         }
+
+        #endregion Clone
+
+        #region Instances
+
+        public static IReadOnlyCollection<VSProject> Instances => instances.Values;
 
         /// <summary>
         ///     Loads a project file at specifiled path anyway. If the project at specified path is already loaded, reloaed it.

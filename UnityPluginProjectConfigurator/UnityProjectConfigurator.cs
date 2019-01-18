@@ -30,15 +30,27 @@ namespace ShuHai.UnityPluginProjectConfigurator
             ProjectVersion = FindProjectVersion(ProjectDirectory);
 
             var slnPath = Path.Combine(ProjectDirectory.FullName, ProjectName + ".sln");
-            SolutionFile = SolutionFile.FromFile(slnPath);
+            if (File.Exists(slnPath))
+                SolutionFile = SolutionFile.FromFile(slnPath);
         }
 
         public void SaveSolution() { SolutionFile.Save(); }
 
         #region Configure
 
-        public void AddCSharpProject(VSProject project, Configs.UnityProject.PluginProject config)
+        public void SetupCSharpProjects(IReadOnlyDictionary<string, Configs.UnityProject.PluginProject> configs)
         {
+            foreach (var kvp in configs)
+                SetupCSharpProject(VSProject.GetOrLoad(kvp.Key), kvp.Value);
+            UpdateProjectReferences();
+
+            SaveSolution();
+        }
+
+        public void SetupCSharpProject(VSProject project, Configs.UnityProject.PluginProject config)
+        {
+            if (SolutionFile == null)
+                throw new InvalidOperationException("Solution file not found.");
             if (project == null)
                 throw new ArgumentNullException(nameof(project));
             if (config == null)
@@ -66,9 +78,44 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
             project.Save();
 
+            RemoveCSharpProject(newPath);
             var slnProj = AddProjectToSolutionFile(project, targetPropertyGroups);
             if (slnProj == null)
                 ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.FilePath}"" skipped.");
+        }
+
+        public void UpdateProjectReferences()
+        {
+            var projects = SolutionFile.Projects;
+
+            var originalToCloned = projects
+                .Select(p => VSProject.GetOrLoad(p.FullPath))
+                .Where(p => p.IsCloned)
+                .ToDictionary(p => VSProject.GetOrLoad(p.CloneSourcePath));
+
+            foreach (var slnProj in projects)
+            {
+                var vsProj = VSProject.Get(slnProj.FullPath);
+                foreach (var projRefItem in vsProj.FindProjectReferences(null))
+                {
+                    var fullPath = Path.GetFullPath(Path.Combine(vsProj.DirectoryPath, projRefItem.Include));
+                    var refProj = VSProject.GetOrLoad(fullPath);
+                    if (originalToCloned.TryGetValue(refProj, out var clonedProj))
+                    {
+                        projRefItem.Include = PathEx.MakeRelative(
+                            ProjectDirectory.FullName + '\\', clonedProj.FilePath);
+                        projRefItem.Metadata.First(m => m.ElementName == "Project").Value = clonedProj.GuidText;
+                    }
+                }
+            }
+        }
+
+        public void RemoveCSharpProject(string path)
+        {
+            var projects = SolutionFile.Projects;
+            var toRemove = projects.FirstOrDefault(p => PathEx.AreEqual(p.FullPath, path));
+            if (toRemove != null)
+                projects.Remove(toRemove);
         }
 
         #region Configuration Groups Selection
@@ -218,9 +265,11 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         public SLNToolsProject AddProjectToSolutionFile(VSProject project, XmlPropertyGroup[] targetPropertyGroups)
         {
-            var projectGuid = $"{{{project.Guid.ToString().ToUpper()}}}";
+            if (SolutionFile.Projects.Any(p => p.ProjectGuid == project.GuidText))
+                throw new ArgumentException("Project already exists in solution.", nameof(project));
+
             var existedProj = SolutionFile.Projects.FirstOrDefault(
-                p => p.ProjectGuid.Equals(projectGuid, StringComparison.OrdinalIgnoreCase));
+                p => p.ProjectGuid.Equals(project.GuidText, StringComparison.OrdinalIgnoreCase));
             if (existedProj != null)
                 return existedProj;
 
@@ -232,10 +281,10 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 CreateProjectConfigurationPropertyLines(solutionConfigurations, projectConfigurationConditions);
 
             var slnProj = new SLNToolsProject(SolutionFile,
-                projectGuid,
+                project.GuidText,
                 "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", // C# project type GUID.
                 project.Name,
-                PathEx.MakeRelativePath(SolutionFile.SolutionFullPath, project.FilePath),
+                PathEx.MakeRelative(SolutionFile.SolutionFullPath, project.FilePath),
                 null, null, null, projectConfigurationsLines);
 
             SolutionFile.Projects.Add(slnProj);

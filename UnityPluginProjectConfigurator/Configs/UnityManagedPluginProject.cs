@@ -15,9 +15,13 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         public bool ForEditor;
 
         /// <summary>
-        ///     Indicates whether to remove existed configurations of the configuring c# project.
+        ///     Indicates whether to configure the plugin project for targeting multiple unity versions. Multiple configurations
+        ///     for the plugin project will be setup base on <see cref="Versions" />  or
+        ///     <see cref="UnityPlugins.DefaultVersions" /> and existed configurations of the plugin project will be removed if the
+        ///     value is set to <see langword="true" />; otherwise, configurations of the plugin project remains if the value is
+        ///     set to <see langword="false" />.
         /// </summary>
-        public bool RemoveExistedConfigurations = true;
+        public bool ForMultipleVersions = true;
 
         /// <summary>
         ///     Collection of supported unity versions and corresponding information of the project to configure.
@@ -25,8 +29,6 @@ namespace ShuHai.UnityPluginProjectConfigurator.Configs
         ///     collection. Set the version information value to <see langword="null" /> to skip certain version.
         /// </summary>
         public VersionInfoDict Versions;
-
-        public bool UseDefaultVersionsAsFallback = true;
 
         public class VersionInfo
         {

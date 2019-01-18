@@ -72,17 +72,22 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static void ConfigureUnityProjects(IReadOnlyDictionary<string, Configs.UnityProject> configs)
         {
-            foreach (var ukvp in configs)
+            foreach (var kvp in configs)
             {
-                var uprojPath = ukvp.Key;
-                var uprojCfg = ukvp.Value;
+                var path = kvp.Key;
+                var config = kvp.Value;
 
-                ConsoleLogger.WriteLine($"Configure unity project: '{uprojPath}'.");
+                ConsoleLogger.WriteLine($"Configure unity project: '{path}'.");
 
-                var configurator = new UnityProjectConfigurator(uprojPath);
-                foreach (var pkvp in uprojCfg.PluginProjects)
-                    configurator.AddCSharpProject(VSProject.GetOrLoad(pkvp.Key), pkvp.Value);
-                configurator.SaveSolution();
+                var configurator = new UnityProjectConfigurator(path);
+                if (configurator.SolutionFile == null)
+                {
+                    ConsoleLogger.WriteLine(LogLevel.Warn,
+                        $@"Solution file of unity project ""{config}"" not found, configure skipped.");
+                    continue;
+                }
+
+                configurator.SetupCSharpProjects(config.PluginProjects);
             }
         }
 
