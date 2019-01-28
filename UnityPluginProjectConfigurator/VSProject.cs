@@ -577,7 +577,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             foreach (var item in compileItems)
             {
                 var fullPath = Path.GetFullPath(Path.Combine(oldProjDir, item.Include));
-                item.Include = PathEx.MakeRelative(newProjDir, fullPath);
+                item.Include = PathUtil.MakeRelative(newProjDir, fullPath);
 
                 var link = item.Metadata.FirstOrDefault(m => m.ElementName == "Link");
                 if (link == null)
@@ -589,7 +589,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             foreach (var item in projRefItems)
             {
                 var fullPath = Path.GetFullPath(Path.Combine(oldProjDir, item.Include));
-                item.Include = PathEx.MakeRelative(newProjDir, fullPath);
+                item.Include = PathUtil.MakeRelative(newProjDir, fullPath);
             }
 
             newProj.CloneSourcePath = project.FilePath;

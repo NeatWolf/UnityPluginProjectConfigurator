@@ -162,7 +162,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             foreach (var asmRef in references)
             {
                 var env = UnityEnvironmentTypesConverter.FromStrings(asmRef.Environments);
-                if (forEditor && (env & UnityEnvironmentTypes.Editor) == 0)
+                if (env == UnityEnvironmentTypes.Editor && !forEditor)
                     continue;
 
                 var path = asmRef.Path;

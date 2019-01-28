@@ -102,7 +102,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                     var refProj = VSProject.GetOrLoad(fullPath);
                     if (originalToCloned.TryGetValue(refProj, out var clonedProj))
                     {
-                        projRefItem.Include = PathEx.MakeRelative(
+                        projRefItem.Include = PathUtil.MakeRelative(
                             ProjectDirectory.FullName + '\\', clonedProj.FilePath);
                         projRefItem.Metadata.First(m => m.ElementName == "Project").Value = clonedProj.GuidText;
                     }
@@ -113,7 +113,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
         public void RemoveCSharpProject(string path)
         {
             var projects = SolutionFile.Projects;
-            var toRemove = projects.FirstOrDefault(p => PathEx.AreEqual(p.FullPath, path));
+            var toRemove = projects.FirstOrDefault(p => PathUtil.AreEqual(p.FullPath, path));
             if (toRemove != null)
                 projects.Remove(toRemove);
         }
@@ -284,7 +284,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
                 project.GuidText,
                 "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", // C# project type GUID.
                 project.Name,
-                PathEx.MakeRelative(SolutionFile.SolutionFullPath, project.FilePath),
+                PathUtil.MakeRelative(SolutionFile.SolutionFullPath, project.FilePath),
                 null, null, null, projectConfigurationsLines);
 
             SolutionFile.Projects.Add(slnProj);
