@@ -139,7 +139,7 @@
     <Compile Include="ConfigParseException.cs" />
     <Compile Include="Configs\UnityManagedPluginProject.cs" />
     <Compile Include="Configs\UnityPlugins.cs" />
-    <Compile Include="ConsoleLogger.cs" />
+    <Compile Include="LoggedConsole.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="CSharpProjectConfigurator.cs" />
     <Compile Include="VSProject.cs" />

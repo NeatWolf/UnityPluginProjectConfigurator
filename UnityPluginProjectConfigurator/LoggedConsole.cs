@@ -2,19 +2,21 @@
 
 namespace ShuHai.UnityPluginProjectConfigurator
 {
-    internal static class ConsoleLogger
+    internal static class LoggedConsole
     {
         public static readonly Logger Logger;
 
-        public static LogLevel LogLevel = LogLevel.Info;
 
-        public static void WriteLine(string value) { Logger.Log(LogLevel, value); }
-        public static void WriteLine(LogLevel logLevel, string value) { Logger.Log(logLevel, value); }
+        public static void WriteInfo(string value) { Logger.Log(LogLevel.Info, value); }
+        public static void WriteInfo(object value) { Logger.Log(LogLevel.Info, value); }
 
-        public static void WriteLine(object value) { Logger.Log(LogLevel, value); }
-        public static void WriteLine(LogLevel logLevel, object value) { Logger.Log(logLevel, value); }
+        public static void WriteWarn(string value) { Logger.Log(LogLevel.Warn, value); }
+        public static void WriteWarn(object value) { Logger.Log(LogLevel.Warn, value); }
 
-        static ConsoleLogger()
+        public static void WriteError(string value) { Logger.Log(LogLevel.Error, value); }
+        public static void WriteError(object value) { Logger.Log(LogLevel.Error, value); }
+
+        static LoggedConsole()
         {
             var config = new NLog.Config.LoggingConfiguration();
 

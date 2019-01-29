@@ -640,9 +640,17 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         private static readonly Dictionary<string, VSProject> instances = new Dictionary<string, VSProject>();
 
-        private static VSProject LoadImpl(string path) => AddInstance(new VSProject(path));
-
-        private static VSProject LoadImpl(ProjectRootElement xml) => AddInstance(new VSProject(new Project(xml)));
+        private static VSProject LoadImpl(string path)
+        {
+            try
+            {
+                return AddInstance(new VSProject(path));
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         private static VSProject AddInstance(VSProject instance)
         {

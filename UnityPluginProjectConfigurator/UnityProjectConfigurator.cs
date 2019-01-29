@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using CWDev.SLNTools.Core;
 using Microsoft.Build.Construction;
-using NLog;
 using SolutionFile = CWDev.SLNTools.Core.SolutionFile;
 
 namespace ShuHai.UnityPluginProjectConfigurator
@@ -38,16 +37,21 @@ namespace ShuHai.UnityPluginProjectConfigurator
 
         #region Configure
 
-        public void SetupCSharpProjects(IReadOnlyDictionary<string, Configs.UnityProject.PluginProject> configs)
+        public IEnumerable<KeyValuePair<string, SLNToolsProject>>
+            SetupCSharpProjects(IReadOnlyDictionary<string, Configs.UnityProject.PluginProject> configs)
         {
             foreach (var kvp in configs)
-                SetupCSharpProject(VSProject.GetOrLoad(kvp.Key), kvp.Value);
+            {
+                var vsproj = VSProject.GetOrLoad(kvp.Key);
+                var slnProj = vsproj != null ? SetupCSharpProject(vsproj, kvp.Value) : null;
+                yield return new KeyValuePair<string, SLNToolsProject>(kvp.Key, slnProj);
+            }
             UpdateProjectReferences();
 
             SaveSolution();
         }
 
-        public void SetupCSharpProject(VSProject project, Configs.UnityProject.PluginProject config)
+        public SLNToolsProject SetupCSharpProject(VSProject project, Configs.UnityProject.PluginProject config)
         {
             if (SolutionFile == null)
                 throw new InvalidOperationException("Solution file not found.");
@@ -79,9 +83,7 @@ namespace ShuHai.UnityPluginProjectConfigurator
             project.Save();
 
             RemoveCSharpProject(newPath);
-            var slnProj = AddProjectToSolutionFile(project, targetPropertyGroups);
-            if (slnProj == null)
-                ConsoleLogger.WriteLine(LogLevel.Warn, $@"Project ""{project.FilePath}"" skipped.");
+            return AddProjectToSolutionFile(project, targetPropertyGroups);
         }
 
         public void UpdateProjectReferences()
